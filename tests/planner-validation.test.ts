@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateScenarioPlan } from "../src/agents/planner.js";
+import { selectScenarios, validateScenarioPlan } from "../src/agents/planner.js";
 import type { NormalizedIssue } from "../src/schemas.js";
 
 const issue: NormalizedIssue = {
@@ -23,5 +23,11 @@ describe("scenario plan validation", () => {
     expect(() => validateScenarioPlan({ issueNumber: 1, scenarios: [{ ...scenario, acceptanceCriteriaIds: ["AC-01"] }] }, issue)).toThrow(/does not cover/);
     expect(() => validateScenarioPlan({ issueNumber: 1, scenarios: [{ ...scenario, acceptanceCriteriaIds: ["AC-01", "AC-99"] }] }, issue)).toThrow(/unknown/);
     expect(() => validateScenarioPlan({ issueNumber: 1, scenarios: [scenario, scenario] }, issue)).toThrow(/duplicate/);
+  });
+  it("selects only the requested generated scenario and rejects unknown IDs", () => {
+    const second = { ...scenario, id: "SC-02", title: "Complete" };
+    expect(selectScenarios([scenario, second], "SC-02")).toEqual([second]);
+    expect(selectScenarios([scenario, second])).toEqual([scenario, second]);
+    expect(() => selectScenarios([scenario], "SC-99")).toThrow(/not found in the generated plan/);
   });
 });

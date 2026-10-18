@@ -5,12 +5,13 @@ import { readConfig, parseCli, usage } from "./config.js";
 import { loadMockIssue } from "./issues/mock-source.js";
 import { loadGitHubIssue } from "./issues/github-source.js";
 import { GeminiAgent } from "./agents/gemini.js";
-import { createScenarioPlan } from "./agents/planner.js";
+import { createScenarioPlan, selectScenarios } from "./agents/planner.js";
 import { executeScenario } from "./agents/executor.js";
 import { PlaywrightMcp } from "./browser/playwright-mcp.js";
 import { appendActionLog, evidenceDirectory, resetActionLog } from "./evidence/logger.js";
 import { buildReport, writeReport } from "./evidence/reporter.js";
 import type { NormalizedIssue, PlannedScenario, ScenarioResult } from "./schemas.js";
+import { isGeminiServiceError } from "./agents/gemini-errors.js";
 
 async function main(): Promise<number> {
   const cli = parseCli(process.argv.slice(2));
@@ -92,9 +93,11 @@ async function main(): Promise<number> {
     await mkdir(screenshotDirectory, { recursive: true });
     const agent = new GeminiAgent(config.GEMINI_API_KEY, config.GEMINI_MODEL);
     const plan = await createScenarioPlan(agent, issue);
-    plannedScenarios = plan.scenarios;
     await writeFile(resolve(evidenceDirectory, "generated-scenarios.json"), `${JSON.stringify({ runId, generatedAt: new Date().toISOString(), model: config.GEMINI_MODEL, plan }, null, 2)}\n`, "utf8");
-    for (const [index, scenario] of plan.scenarios.entries()) {
+    const scenariosToRun = selectScenarios(plan.scenarios, cli.scenario);
+    plannedScenarios = scenariosToRun;
+    let geminiServiceFailed = false;
+    for (const [index, scenario] of scenariosToRun.entries()) {
       let browser: PlaywrightMcp | undefined;
       try {
         browser = new PlaywrightMcp(config.HEADLESS);
@@ -106,7 +109,7 @@ async function main(): Promise<number> {
           event: "mcp_tools_discovered",
           tools: discovered.map(({ name, inputSchema }) => ({ name, inputSchema })),
         });
-        results.push(await executeScenario({
+        const result = await executeScenario({
           agent,
           browser,
           issue,
@@ -119,10 +122,14 @@ async function main(): Promise<number> {
             maxSeconds: config.MAX_SCENARIO_SECONDS,
             maxRecoveryRetries: config.MAX_RECOVERY_RETRIES,
           },
-        }));
+        });
+        results.push(result);
+        geminiServiceFailed = result.status === "BLOCKED" && isGeminiServiceError(result.reason);
+        if (geminiServiceFailed) blocker = `Gemini service request failed; remaining scenarios were not attempted. ${result.reason}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         blocker = blocker ? `${blocker}; ${scenario.id}: ${message}` : `${scenario.id}: ${message}`;
+        geminiServiceFailed = isGeminiServiceError(error);
         await appendActionLog({ timestamp: new Date().toISOString(), runId, scenarioId: scenario.id, event: "scenario_infrastructure_error", message });
         results.push({
           scenarioId: scenario.id,
@@ -147,9 +154,27 @@ async function main(): Promise<number> {
           }
         }
       }
+      if (geminiServiceFailed) {
+        for (const skippedScenario of scenariosToRun.slice(index + 1)) {
+          results.push({
+            scenarioId: skippedScenario.id,
+            title: skippedScenario.title,
+            acceptanceCriteriaIds: skippedScenario.acceptanceCriteriaIds,
+            status: "BLOCKED",
+            expected: skippedScenario.expectedResult,
+            observed: "Execution stopped before browser verification.",
+            reason: "Gemini service request failed; no further scenarios were attempted.",
+            evidence: [],
+            actionCount: 0,
+            recoveryCount: 0,
+          });
+        }
+        break;
+      }
     }
   } catch (error) {
     blocker = error instanceof Error ? error.message : String(error);
+    if (isGeminiServiceError(error)) blocker = `Gemini service request failed; no further scenarios were attempted. ${blocker}`;
     await appendActionLog({ timestamp: new Date().toISOString(), runId, event: "infrastructure_error", message: blocker });
     process.stderr.write(`Run blocked: ${blocker}\n`);
   }

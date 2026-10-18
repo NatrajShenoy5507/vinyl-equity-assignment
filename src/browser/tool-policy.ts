@@ -27,7 +27,12 @@ const jsonSchemaShape = z.object({
 export interface DiscoveredTool {
   name: string;
   description?: string;
-  inputSchema: { type: "object"; properties?: Record<string, object>; required?: string[] };
+  inputSchema: {
+    type: "object";
+    properties?: Record<string, object>;
+    required?: string[];
+    additionalProperties?: boolean | Record<string, unknown>;
+  };
 }
 
 export function getPermittedTools(tools: DiscoveredTool[]): DiscoveredTool[] {
@@ -74,6 +79,23 @@ export function validateToolArguments(args: Record<string, unknown>, inputSchema
   return parsed.data;
 }
 
+function normalizeTargetReference(name: string, args: Record<string, unknown>, inputSchema: unknown): Record<string, unknown> {
+  if ((name === "browser_click" || name === "browser_type")
+    && args.target !== undefined && args.ref !== undefined && args.target !== args.ref) {
+    throw new Error("Conflicting target and ref accessibility references.");
+  }
+
+  const parsedSchema = jsonSchemaShape.safeParse(inputSchema);
+  if (!parsedSchema.success) return args;
+  if (parsedSchema.data.required?.includes("target") !== true) return args;
+  if (name !== "browser_click" && name !== "browser_type") return args;
+
+  const normalized = { ...args };
+  if (normalized.target === undefined && normalized.ref !== undefined) normalized.target = normalized.ref;
+  delete normalized.ref;
+  return normalized;
+}
+
 export function validateToolAction(
   name: string,
   args: Record<string, unknown>,
@@ -83,7 +105,8 @@ export function validateToolAction(
   if (!safeToolNames.has(name)) throw new Error(`Tool "${name}" is not permitted.`);
   const tool = discovered.find((candidate) => candidate.name === name);
   if (!tool) throw new Error(`Tool "${name}" was not discovered from the Playwright MCP server.`);
-  const validated = validateToolArguments(args, tool.inputSchema);
+  const normalized = normalizeTargetReference(name, args, tool.inputSchema);
+  const validated = validateToolArguments(normalized, tool.inputSchema);
   const parsed = name === "browser_navigate" ? navigationArgs.safeParse(validated)
     : name === "browser_snapshot" ? snapshotArgs.safeParse(validated)
       : name === "browser_click" ? clickArgs.safeParse(validated)

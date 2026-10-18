@@ -31,7 +31,19 @@ describe("Playwright MCP tool policy", () => {
       inputSchema: { type: "object", properties: { target: { type: "string" } }, required: ["target"] },
     };
     expect(validateToolAction("browser_click", { target: "e8" }, [targetTool], "https://demo.test/")).toEqual({ target: "e8" });
+    expect(validateToolAction("browser_click", { ref: "e8" }, [targetTool], "https://demo.test/")).toEqual({ target: "e8" });
+    expect(validateToolAction("browser_click", { target: "e8", ref: "e8" }, [targetTool], "https://demo.test/")).toEqual({ target: "e8" });
+    expect(() => validateToolAction("browser_click", {}, [targetTool], "https://demo.test/")).toThrow(/arguments\.target is required/);
+    expect(() => validateToolAction("browser_click", { target: "e8", ref: "e9" }, [targetTool], "https://demo.test/")).toThrow(/Conflicting target and ref/);
     expect(() => validateToolAction("browser_click", { target: "#todo" }, [targetTool], "https://demo.test/")).toThrow(/accessibility reference/);
+  });
+  it("does not rewrite ref when the discovered schema requires ref instead of target", () => {
+    const refTool: DiscoveredTool = {
+      name: "browser_click",
+      inputSchema: { type: "object", properties: { ref: { type: "string" } }, required: ["ref"] },
+    };
+    expect(validateToolAction("browser_click", { ref: "e8" }, [refTool], "https://demo.test/")).toEqual({ ref: "e8" });
+    expect(() => validateToolAction("browser_click", { target: "e8" }, [refTool], "https://demo.test/")).toThrow(/arguments\.ref is required/);
   });
   it("does not let the model choose a snapshot output path", () => {
     expect(() => validateToolAction("browser_snapshot", { filename: "C:\\secrets.txt" }, tools, "https://demo.test/")).toThrow(/Unrecognized key/);

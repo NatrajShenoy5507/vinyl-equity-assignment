@@ -4,9 +4,10 @@ import { executorDecisionSchema, type ExecutorDecision, type NormalizedIssue, ty
 import { executorPrompt } from "../prompts/executor-prompt.js";
 import { getPermittedTools, validateToolAction, type DiscoveredTool } from "../browser/tool-policy.js";
 import { appendActionLog } from "../evidence/logger.js";
+import { isGeminiServiceError } from "./gemini-errors.js";
 
 export interface JsonAgent {
-  generateJson(prompt: string, schema: Record<string, unknown>, timeoutMs?: number): Promise<unknown>;
+  generateJson(prompt: string, schema: Record<string, unknown>, timeoutMs?: number, requestKind?: "planner" | "executor"): Promise<unknown>;
 }
 
 export interface BrowserAgent {
@@ -19,6 +20,51 @@ interface ExecutorLimits {
   maxActions: number;
   maxSeconds: number;
   maxRecoveryRetries: number;
+}
+
+function decisionJsonSchema(tools: DiscoveredTool[], onlyToolName?: string): Record<string, unknown> {
+  const finishDecision = {
+    type: "object",
+    properties: {
+      kind: { type: "string", enum: ["finish"] },
+      assessments: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            acceptanceCriteriaId: { type: "string" },
+            meets: { type: "boolean" },
+            observedEvidence: { type: "string" },
+            explanation: { type: "string" },
+          },
+          required: ["acceptanceCriteriaId", "meets", "observedEvidence", "explanation"],
+          additionalProperties: false,
+        },
+      },
+      rationale: { type: "string" },
+    },
+    required: ["kind", "assessments", "rationale"],
+    additionalProperties: false,
+  };
+  const actionDecisions = tools
+    .filter((tool) => onlyToolName === undefined || tool.name === onlyToolName)
+    .map((tool) => ({
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["action"] },
+        toolName: { type: "string", enum: [tool.name] },
+        arguments: {
+          type: "object",
+          properties: tool.inputSchema.properties ?? {},
+          required: tool.inputSchema.required ?? [],
+          additionalProperties: false,
+        },
+        rationale: { type: "string" },
+      },
+      required: ["kind", "toolName", "arguments", "rationale"],
+      additionalProperties: false,
+    }));
+  return { type: "object", anyOf: [finishDecision, ...actionDecisions] };
 }
 
 export interface ExecuteInput {
@@ -74,6 +120,8 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
   let screenshotCount = 0;
   let recoveryCount = 0;
   let latestSnapshot = "";
+  let invalidActionFeedback: string | undefined;
+  let rejectedToolName: string | undefined;
   let previousActionKey = "";
   let unchangedActionCount = 0;
   const tools = getPermittedTools(browser.discoveredTools);
@@ -116,18 +164,9 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
         snapshot: latestSnapshot,
         history,
         uniqueTaskText,
-        availableTools: tools,
-      }), {
-        type: "object",
-        properties: {
-          kind: { type: "string", enum: ["action", "finish"] },
-          toolName: { type: "string" },
-          arguments: { type: "object" },
-          rationale: { type: "string" },
-          assessments: { type: "array", items: { type: "object", properties: { acceptanceCriteriaId: { type: "string" }, meets: { type: "boolean" }, observedEvidence: { type: "string" }, explanation: { type: "string" } } } },
-        },
-        required: ["kind", "rationale"],
-      }, Math.min(30_000, remainingMs));
+        availableTools: tools.map(({ name, description }) => ({ name, ...(description ? { description } : {}) })),
+        invalidActionFeedback,
+      }), decisionJsonSchema(tools, rejectedToolName), Math.min(30_000, remainingMs), "executor");
       const decision = parseDecision(proposed);
       if (decision.kind === "finish") {
         const assessments = new Map(decision.assessments.map((assessment) => [assessment.acceptanceCriteriaId, assessment]));
@@ -162,9 +201,16 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
       try {
         args = validateToolAction(decision.toolName, decision.arguments, browser.discoveredTools, issue.targetUrl);
       } catch (error) {
-        await record({ toolName: decision.toolName, status: "rejected", arguments: decision.arguments, result: error instanceof Error ? error.message : String(error), rationale: decision.rationale });
-        return blockedResult(scenario, issue, error instanceof Error ? error.message : String(error), actionCount, recoveryCount, evidence);
+        const reason = error instanceof Error ? error.message : String(error);
+        await record({ toolName: decision.toolName, status: "rejected", arguments: decision.arguments, result: reason, rationale: decision.rationale });
+        if (recoveryCount >= limits.maxRecoveryRetries) return blockedResult(scenario, issue, reason, actionCount, recoveryCount, evidence);
+        recoveryCount += 1;
+        invalidActionFeedback = reason;
+        rejectedToolName = decision.toolName;
+        continue;
       }
+      invalidActionFeedback = undefined;
+      rejectedToolName = undefined;
       const targetReference = typeof args.target === "string" ? args.target : typeof args.ref === "string" ? args.ref : undefined;
       if (targetReference && !latestSnapshot.includes(`[ref=${targetReference}]`)) {
         const message = `Element reference ${targetReference} is not present in the latest accessibility snapshot.`;
@@ -216,7 +262,8 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
       if (Date.now() >= deadline) return blockedResult(scenario, issue, "Scenario time limit reached before all criteria were verified.", actionCount, recoveryCount, evidence);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      await record({ toolName: "executor", status: "error", result: reason });
+      const serviceFailure = isGeminiServiceError(error);
+      await record({ toolName: "executor", status: serviceFailure ? "service_error" : "error", result: reason });
       return blockedResult(scenario, issue, reason, actionCount, recoveryCount, evidence);
     }
   }

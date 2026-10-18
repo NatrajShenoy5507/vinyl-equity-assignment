@@ -24,6 +24,12 @@ describe("GitHub issue source", () => {
     expect(() => parseCli(["--source=github", "--repo=owner/repository"])).toThrow(/requires --repo/);
   });
 
+  it("parses a single dynamically generated scenario selector", () => {
+    expect(parseCli(["--source=mock", "--scenario=SC-01"])).toMatchObject({ source: "mock", scenario: "SC-01" });
+    expect(parseCli(["--source", "mock", "--scenario", "SC-02"]).scenario).toBe("SC-02");
+    expect(() => parseCli(["--scenario="])).toThrow(/requires a scenario ID/);
+  });
+
   it("reports remote API failures without making them product failures", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("not found", { status: 404, statusText: "Not Found" })));
     await expect(loadGitHubIssue("owner/repository", 9)).rejects.toThrow(/GitHub issue request failed \(404/);

@@ -16,6 +16,7 @@ export interface CliOptions {
   source: "mock" | "github";
   repo?: string;
   issue?: number;
+  scenario?: string;
   help: boolean;
 }
 
@@ -51,6 +52,9 @@ export function parseCli(args: string[]): CliOptions {
       const issueNumber = Number(value);
       if (!Number.isInteger(issueNumber) || issueNumber < 1) throw new Error("--issue must be a positive integer.");
       options.issue = issueNumber;
+    } else if (rawKey === "--scenario") {
+      if (!value?.trim()) throw new Error("--scenario requires a scenario ID such as SC-01.");
+      options.scenario = value.trim();
     } else {
       throw new Error(`Unknown option: ${argument}`);
     }
@@ -66,6 +70,7 @@ export const usage = `Autonomous UI QA Agent
 Usage:
   npm run qa:mock
   npm run qa:github -- --repo=OWNER/REPOSITORY --issue=NUMBER
+  npm run qa:mock -- --scenario=SC-01
   npm run qa:browser-smoke
   npm run start -- --help
 

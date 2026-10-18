@@ -44,6 +44,13 @@ export function validateScenarioPlan(input: unknown, issue: NormalizedIssue): Sc
   return parsed.data;
 }
 
+export function selectScenarios(scenarios: ScenarioPlan["scenarios"], scenarioId?: string): ScenarioPlan["scenarios"] {
+  if (!scenarioId) return scenarios;
+  const selected = scenarios.filter((scenario) => scenario.id === scenarioId);
+  if (selected.length === 0) throw new Error(`Scenario "${scenarioId}" was not found in the generated plan.`);
+  return selected;
+}
+
 export async function createScenarioPlan(agent: GeminiAgent, issue: NormalizedIssue): Promise<ScenarioPlan> {
   const prompt = plannerPrompt(issue);
   let previousError = "";
@@ -51,6 +58,8 @@ export async function createScenarioPlan(agent: GeminiAgent, issue: NormalizedIs
     const response = await agent.generateJson(
       attempt === 0 ? prompt : `${prompt}\nThe previous response was rejected: ${previousError}. Correct the schema/coverage and return valid JSON only.`,
       plannerJsonSchema,
+      undefined,
+      "planner",
     );
     try {
       return validateScenarioPlan(response, issue);
