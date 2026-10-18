@@ -1,0 +1,94 @@
+{
+  "issueFingerprint": "078900874e0b61fa547edfdb5230a4eb6edf1e21e73fbe64498a703a951f141d",
+  "applicationContextFingerprint": "46ad37c3746df2f9cccfc4fa69fa7aa4da6fa947554b195bfc066066eb664ac2",
+  "modelName": "gemini-3.1-flash-lite",
+  "generatedAt": "2026-10-18T09:39:42.701Z",
+  "plan": {
+    "issueNumber": 1,
+    "scenarios": [
+      {
+        "id": "SC-01",
+        "title": "Create, Complete, Filter, and Delete Todo Items",
+        "acceptanceCriteriaIds": [
+          "AC-01",
+          "AC-02",
+          "AC-03",
+          "AC-04"
+        ],
+        "preconditions": [
+          "User is on the TodoMVC homepage"
+        ],
+        "steps": [
+          {
+            "intent": "Enter a new task name into the input field and press enter",
+            "expectedObservation": "The task appears in the list"
+          },
+          {
+            "intent": "Click the checkbox associated with the task",
+            "expectedObservation": "The task is marked as completed"
+          },
+          {
+            "intent": "Create a second task and leave it active",
+            "expectedObservation": "Both tasks are visible in the list"
+          },
+          {
+            "intent": "Click the Active filter link",
+            "expectedObservation": "Only the active task is visible"
+          },
+          {
+            "intent": "Click the delete button for the active task",
+            "expectedObservation": "The task is removed from the list"
+          }
+        ],
+        "verificationStrategy": "Sequential verification of task lifecycle states using unique markers for each action.",
+        "verificationChecks": [
+          {
+            "acceptanceCriterionId": "AC-01",
+            "kind": "visible",
+            "expectedVisible": [
+              "{{uniqueTaskText}}"
+            ],
+            "expectedAbsent": []
+          },
+          {
+            "acceptanceCriterionId": "AC-02",
+            "kind": "checked",
+            "expectedVisible": [
+              "{{uniqueTaskText}}"
+            ],
+            "expectedAbsent": []
+          },
+          {
+            "acceptanceCriterionId": "AC-03",
+            "kind": "filter",
+            "expectedVisible": [
+              "{{uniqueTaskText}}-ACTIVE"
+            ],
+            "expectedAbsent": [
+              "{{uniqueTaskText}}-COMPLETED"
+            ]
+          },
+          {
+            "acceptanceCriterionId": "AC-04",
+            "kind": "absent_after_seen",
+            "expectedVisible": [
+              "{{uniqueTaskText}}"
+            ],
+            "expectedAbsent": [
+              "{{uniqueTaskText}}"
+            ]
+          }
+        ],
+        "relevantApplicationContext": [
+          "textbox: What needs to be done? (active)"
+        ],
+        "unknownControlsToDiscover": [
+          "checkbox for task completion",
+          "filter links for All, Active, Completed",
+          "delete button for tasks"
+        ],
+        "expectedResult": "The user can successfully manage the task lifecycle from creation through deletion."
+      }
+    ]
+  }
+}

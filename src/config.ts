@@ -7,6 +7,7 @@ const envSchema = z.object({
   TARGET_URL: z.string().url().default("https://demo.playwright.dev/todomvc/"),
   GITHUB_TOKEN: z.string().optional(),
   MAX_ACTIONS_PER_SCENARIO: z.coerce.number().int().min(1).max(50).default(15),
+  MAX_EXECUTOR_REQUESTS_PER_SCENARIO: z.coerce.number().int().min(1).max(100).default(32),
   MAX_SCENARIO_SECONDS: z.coerce.number().int().min(1).max(600).default(120),
   MAX_RECOVERY_RETRIES: z.coerce.number().int().min(0).max(1).default(1),
   HEADLESS: z.string().default("false"),
@@ -71,6 +72,7 @@ Usage:
   npm run qa:mock
   npm run qa:github -- --repo=OWNER/REPOSITORY --issue=NUMBER
   npm run qa:mock -- --scenario=SC-01
+  npm run qa:explore
   npm run qa:browser-smoke
   npm run start -- --help
 

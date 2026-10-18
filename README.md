@@ -45,21 +45,25 @@ A GitHub Projects board's custom **Status** field and an issue label are differe
 
 ## Evidence and outcomes
 
-The CLI writes:
+The CLI writes deterministic evidence produced by TypeScript (not by Gemini summarizing the run):
 
+- `evidence/application-context.json` — validated Phase 2 Application Context for the latest exploration.
 - `evidence/generated-scenarios.json` — actual validated Gemini plan for the latest successful planning request.
 - `evidence/action-log.ndjson` — timestamped tool discovery, decisions, observations and assertion records.
 - `evidence/screenshots/<runId>/` — screenshots returned by Playwright MCP and checked on disk.
-- `evidence/report.json` and `evidence/report.md` — deterministic per-run outcome and exact evidence references.
+- `evidence/report.json` and `evidence/report.md` — latest convenience copies of the deterministic QA report.
+- `evidence/runs/<runId>/` — run-scoped copies of report, application context, generated scenarios, and action log so earlier runs are not overwritten by later ones.
 - `evidence/browser-smoke.json` — separate MCP infrastructure check, explicitly not an AC-level QA result.
 
-PASS requires an observed browser quote for every AC plus a real saved screenshot. FAIL means an observed contradiction. BLOCKED means the feature could not be verified because of an API, browser, navigation, safety, ambiguity or run-limit issue. SKIPPED means the issue is not RFQA. These statuses are not interchangeable. Infrastructure/setup errors return a non-zero exit code; observed FAIL/BLOCKED also returns non-zero.
+`report.md` is structured for QA review: executive summary, issue/target, environment/model, six-phase execution summary (`COMPLETED`/`FAILED`/`BLOCKED`/`NOT_RUN`), generated scenarios, acceptance-criteria traceability, per-scenario results (including host verification and browser actions), revalidation details when Phase 5 ran, artifact inventory, blockers, and final status. Phase operational status is separate from scenario PASS/FAIL/BLOCKED/SKIPPED; Phase 5 `NOT_RUN` when there was no host-verified FAIL is expected.
+
+PASS requires host-verified checks against real post-action observations plus retained screenshot evidence. FAIL means an observed contradiction. BLOCKED means the feature could not be verified because of an API, browser, navigation, safety, ambiguity or run-limit issue (including Gemini 429/503/504). SKIPPED means the issue is not RFQA. Acceptance criteria are marked PASS only from host verification, never merely because a scenario listed the criterion ID. These statuses are not interchangeable. Infrastructure/setup errors return a non-zero exit code; observed FAIL/BLOCKED also returns non-zero.
 
 Without `GEMINI_API_KEY`, `npm run qa:mock` records a BLOCKED outcome, not a fake generated plan. Unit tests can run without credentials. If a run stops before generation, the report/log still preserve the blocker.
 
 ## Architecture
 
-`src/issues/` validates mock or GitHub issue content; `src/agents/planner.ts` generates and checks complete AC coverage; `src/browser/` starts the MCP server, discovers schemas and restricts available tools; `src/agents/executor.ts` runs a bounded observe/act/verify loop; `src/evidence/` logs actual operations and produces reports. Each scenario receives a fresh MCP/browser process for state isolation. The project uses the installed MCP TypeScript SDK v1 (`Client` + `StdioClientTransport`) consistently and the `@google/genai` SDK.
+`src/issues/` validates mock or GitHub issue content; `src/browser/explorer.ts` builds the Phase 2 Application Context; `src/agents/planner.ts` generates and checks complete AC coverage; `src/browser/` starts the MCP server, discovers schemas and restricts available tools; `src/agents/executor.ts` runs a bounded observe/act/verify loop; `src/agents/revalidator.ts` optionally re-runs host-verified FAIL once; `src/evidence/` maintains the phase ledger, action log, and deterministic JSON/Markdown reports. Each scenario receives a fresh MCP/browser process for state isolation. The project uses the installed MCP TypeScript SDK v1 (`Client` + `StdioClientTransport`) consistently and the `@google/genai` SDK.
 
 ## Troubleshooting
 

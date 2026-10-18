@@ -3,6 +3,7 @@ import { getPermittedTools, validateToolAction, type DiscoveredTool } from "../s
 
 const tools = [
   { name: "browser_click", inputSchema: { type: "object" as const, properties: { ref: { type: "string" } } } },
+  { name: "browser_hover", inputSchema: { type: "object" as const, properties: { target: { type: "string" } }, required: ["target"] } },
   { name: "browser_navigate", inputSchema: { type: "object" as const, properties: { url: { type: "string" } }, required: ["url"] } },
   { name: "browser_snapshot", inputSchema: { type: "object" as const, properties: { filename: { type: "string" } } } },
   { name: "browser_take_screenshot", inputSchema: { type: "object" as const, properties: { filename: { type: "string" } } } },
@@ -11,7 +12,11 @@ const tools = [
 
 describe("Playwright MCP tool policy", () => {
   it("only exposes safe discovered browser tools", () => {
-    expect(getPermittedTools(tools).map((tool) => tool.name)).toEqual(["browser_click", "browser_navigate", "browser_snapshot"]);
+    expect(getPermittedTools(tools).map((tool) => tool.name)).toEqual(["browser_click", "browser_hover", "browser_navigate", "browser_snapshot"]);
+  });
+  it("allows safe hover only with a semantic reference from the current snapshot", () => {
+    expect(validateToolAction("browser_hover", { target: "e12" }, tools, "https://demo.test/")).toEqual({ target: "e12" });
+    expect(() => validateToolAction("browser_hover", { target: "#delete" }, tools, "https://demo.test/")).toThrow(/accessibility reference/);
   });
   it("rejects unlisted, unsafe screenshot, unknown and off-origin actions", () => {
     expect(() => validateToolAction("browser_run_code_unsafe", {}, tools, "https://demo.test/")).toThrow(/not permitted/);

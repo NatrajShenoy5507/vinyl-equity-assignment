@@ -1,33 +1,120 @@
-# Test plan and architecture
+# Autonomous UI Testing Agent — Test Plan and Architecture
 
-## Runtime flow
+## Implementation status
 
-`src/index.ts` loads configuration and the issue, applies the RFQA gate, asks Gemini for a coverage-checked scenario plan, connects to Playwright MCP, executes each plan, and writes deterministic JSON/Markdown reports. Issue normalization, prompt building, Gemini planning/execution, the discovered MCP tool policy, evidence logging and rendering are separated into small modules.
+This file is the project’s single source of truth for the test architecture. It describes the implemented six-phase Autonomous UI Testing Agent workflow. Each phase below labels its current state explicitly.
 
-## Dynamic planning and execution
+Current implementation provides issue ingestion and normalization, an RFQA readiness gate, bounded Playwright MCP application exploration before scenario planning, dynamic Gemini scenario planning, bounded Gemini/Playwright MCP scenario execution with local safety and evidence validation, conditional one-attempt functional failure revalidation, and deterministic JSON/Markdown reporting with a six-phase status matrix, acceptance-criteria traceability, run-scoped evidence dual-writes, and dedicated revalidation sections.
 
-`GeminiAgent` uses the official `@google/genai` `models.generateContent` API with JSON response constraints. The planner sees only the normalized story and ACs, must map every known AC, and gets one format-repair attempt. The executor receives the current accessibility snapshot, planned intent, actual recent browser results and discovered MCP tool schemas, then chooses one tool action or proposes evidence-based AC assessments. Its structured output schema has a tool-specific action branch that requires the selected MCP tool's advertised arguments; arguments are then validated locally. A single dynamically planned scenario can be debugged with `npm run qa:mock -- --scenario=SC-01`. Actions and assessment quotes are validated locally; a model status string cannot set a result.
+## Phase 1 — Requirement Discovery
 
-The workspace already had MCP TypeScript SDK v1 installed, so this implementation uses its documented `Client` and `StdioClientTransport` APIs consistently. It does not mix v1 and v2 packages. At runtime the `@playwright/mcp` server tool list and JSON input schemas are discovered; Gemini may choose only navigation, snapshot, click, type and press-key actions. The host invokes screenshots with a fixed evidence path and validated screenshot schema; model-controlled screenshot/snapshot output paths are rejected. Click/type references (for the current server, `target: "eN"`) must occur in the latest accessibility snapshot; CSS/XPath selectors are rejected. Unsafe code execution, arbitrary file access and shell/network tools are not exposed.
+**Status: Implemented, with the structured Requirement Context as a proposed explicit artifact.**
 
-## Verification and status policy
+- **Input:** A GitHub issue (`--source=github --repo=OWNER/REPOSITORY --issue=NUMBER`) or the local mock ticket (`--source=mock`), plus runtime configuration.
+- **Processing responsibilities:**
+  - Load the selected issue source and normalize its title, description/user story, acceptance criteria, target URL, and readiness status.
+  - Validate required fields and acceptance-criteria identifiers; reject malformed or incomplete requirements as ingestion errors.
+  - Apply the RFQA readiness gate before starting Gemini or Playwright. Issues that are not RFQA are SKIPPED without model or browser startup.
+  - Provide a structured requirement context to downstream phases. **Current behavior passes a normalized issue object; a separately named and persisted Requirement Context object is proposed, not implemented.**
+- **Output artifacts:** Current implementation keeps the normalized issue in memory and records ingestion failures in the action log and report. A standalone Requirement Context artifact is proposed.
+- **Exit criteria:** Requirements are valid and RFQA-ready before planning proceeds. Invalid ingestion is BLOCKED; non-RFQA issues are SKIPPED. No scenario execution starts without a normalized, ready issue.
 
-A result can be PASS only if the executor supplies every scenario AC, each cited quote exactly occurs in a captured real tool result/snapshot, and a browser screenshot was saved. A cited, observed contradiction is FAIL. Unproven/ambiguous assertions, unavailable dependencies, API failures, unsafe/invalid tool decisions and exhausted limits are BLOCKED. Issues without RFQA are SKIPPED before Gemini or browser startup. Failure to start an external dependency is an infrastructure blocker, not a product failure.
+## Phase 2 — Application Exploration
 
-Browser interaction has a per-scenario cap on Gemini-selected browser actions and a wall-clock cap. Only one failed-interaction recovery is permitted (fresh snapshot, then a new model decision); repeated identical action/snapshot loops stop. MCP operations and Gemini requests have finite timeouts. Gemini quota/rate-limit failures are BLOCKED and stop further scenario requests for that run. URL navigation is constrained to the issue target's origin, and the URL in every snapshot is checked to detect off-origin redirects/click-throughs. Each scenario starts a new Playwright MCP process/browser context, then re-navigates the app and uses unique run/scenario data, so browser storage/state is isolated between scenarios.
+**Status: Implemented as a bounded, read-only MCP exploration phase whose validated observations feed Gemini scenario generation.**
 
-Screenshots are returned through the real MCP screenshot tool and saved/verified under `evidence/screenshots/<runId>/`. Action logs record bounded observations, safe arguments, status and concise rationale; API keys are never emitted. Reports are generated by TypeScript, not by Gemini. One run's evidence and screenshot references are tied by a run ID.
+- **Input:** The Phase 1 Requirement Context and its target application URL.
+- **Processing responsibilities:**
+  - Start Playwright MCP **before** generating test scenarios.
+  - Navigate to the target application and inspect the actual loaded page.
+  - Capture the current URL, title, accessibility snapshot, visible semantic controls, and screenshots.
+  - Build a structured Application Context that separates observed capabilities from unknown or hidden elements.
+  - Use observed accessibility references only; do not invent selectors or infer unseen UI.
+  - Keep exploration bounded, safe, and preferably non-destructive. Do not classify temporarily unavailable UI elements as product defects.
+- **Output artifacts:** `evidence/application-context.json` contains the validated Application Context, observed page data, source tool references, timestamps, unknowns, diagnostics, and a run-associated screenshot reference. `npm run qa:explore` runs this phase without Gemini. `qa:browser-smoke` remains a separate MCP infrastructure check; `qa:mcp-integration` exercises MCP against a local Todo fixture and is not exploration of the configured application.
+- **Exit criteria:** Exploration produces a verifiable context tied to the target origin, or records an infrastructure/exploration blocker. Lack of observable evidence remains unknown; it is not a product failure.
 
-`npm run qa:mcp-integration` is a deterministic, Gemini-free MCP integration check against a local Todo fixture: it navigates to the fixture, creates one unique Todo through discovered MCP tools, and verifies the Todo appears in a fresh accessibility snapshot. It verifies MCP/browser wiring only; it does not evaluate the configured target application or acceptance criteria and is not a real autonomous AI test. Gemini API calls are configured for one HTTP attempt, overriding the SDK's default five attempts; a model-service error blocks the current scenario and stops the run before remaining scenarios are started.
+## Phase 3 — Context-Aware Test Scenario Generation
 
-## Test coverage
+**Status: Implemented; dynamic generation consumes validated Phase 1 requirements and the observed Phase 2 Application Context, including verification and unknown-control planning.**
 
-`npm test` covers issue parsing and invalid shapes, RFQA/non-RFQA values, AC coverage, malformed/unknown/duplicate scenario references, result-policy separation, refusal of model-authored PASS status, tool allowlisting/origin checks, safe Gemini request diagnostics, service-error handling, and deterministic report content. These are local unit tests and are not represented as live app results. The MCP integration check separately requires access to Playwright MCP and the target browser app. Real end-to-end AI verification additionally requires a valid `GEMINI_API_KEY`, available model quota, and successful executor responses.
+- **Input:** The normalized Phase 1 issue and validated, successful Phase 2 Application Context are supplied to Gemini through the planner prompt.
+- **Processing responsibilities:**
+  - Generate scenarios dynamically with Gemini; do not replace this with hardcoded Playwright test scripts.
+  - Map every scenario to known acceptance criteria and define preconditions, test intentions, expected observations, verification strategy, observed affordances, and unknown controls to discover.
+  - Validate generated structure, scenario identifiers, criterion references, duplicates, and complete acceptance-criteria coverage before execution.
+  - Optionally select one dynamically generated scenario with `--scenario=SC-01`; this reduces execution requests, but planning still occurs first.
+- **Output artifacts:** `evidence/generated-scenarios.json` records the run, model, validated scenarios, acceptance-criteria mapping, and referenced Application Context. A fingerprinted cache reuses only validated plans with unchanged issue, observed application context, and model inputs.
+- **Exit criteria:** The plan is structurally valid, refers to the selected issue, has unique scenario IDs, covers every known acceptance criterion, and—when requested—contains the selected scenario ID. Invalid plans are BLOCKED and are not executed.
 
-## Recovery and flaky states
+## Phase 4 — Autonomous Test Execution
 
-A stale/failed MCP action triggers at most one new snapshot and one re-selection by Gemini. A repeated action against an unchanged snapshot stops. No implicit locator fallback, arbitrary JavaScript evaluation, or unbounded retry is used. If the server's tool schema differs or no reliable reference is available, the result remains BLOCKED with the actual reason.
+**Status: Implemented as adaptive Gemini-selected MCP actions with host-validated tool arguments, fresh snapshot references, bounded request/action/time budgets, and independent semantic verification checks.**
 
-## Security and cost
+- **Input:** Each selected, validated Phase 3 scenario (including verification checks and unknown controls), the normalized issue, discovered Playwright MCP schemas, and a fresh per-scenario browser snapshot.
+- **Processing responsibilities:**
+  - Execute each scenario in a newly launched Playwright MCP session, navigate to the target, and execute scenario intentions with Gemini selecting one browser action at a time.
+  - Refresh browser observations after actions and base decisions on the latest accessibility snapshot and actual tool results.
+  - Validate tool names against the safe allowlist (including semantic hover); constrain structured output with each permitted tool’s discovered schema; validate arguments locally against that schema.
+  - For click/type, require exact semantic references from the latest accessibility snapshot. Reject CSS/XPath selectors, conflicting or missing references, and references absent from the snapshot. A compatible `ref` is normalized to `target` only when the discovered schema requires `target`.
+  - Enforce target-origin navigation, finite MCP/Gemini timeouts, action and wall-clock limits, bounded invalid-action/interaction recovery, and repeated-action loop stopping.
+  - Keep scenarios in independent Playwright MCP browser contexts and use unique run/scenario data.
+  - Capture pre-action/post-action observations and screenshots. Keep Gemini assessments separate from host-validated criterion checks. PASS requires every declared verification check to pass against post-action snapshots and each cited quote to match an actual post-action snapshot. A host-observed contradictory checked state, deletion, or filter result may be FAIL; uncertainty, unsafe/invalid actions, missing evidence, exhausted limits, or infrastructure/model failures are BLOCKED.
+- **Output artifacts:** Current per-scenario results, screenshots under `evidence/screenshots/<runId>/`, and bounded `evidence/action-log.ndjson` entries. The deterministic `qa:mcp-integration` command is a Gemini-free MCP wiring check against a local fixture, not an autonomous AI test and not a target-application acceptance test.
+- **Exit criteria:** Each executed scenario has a defensible PASS, FAIL, or BLOCKED result and retained evidence. Model claims alone never establish a result. No action outside the discovered safe tool allowlist is run.
 
-Use a local `.env`; never add it to source control. Issue and page text are untrusted and prompts treat embedded directives as data. The model cannot select local paths, secrets, origins, or result status. GitHub tokens are optional for public issues and should have only the least access needed for private issue reads. A run makes model requests for plan generation and per-action decisions; action/time bounds limit spend.
+## Phase 5 — Conditional Failure Revalidation
+
+**Status: Implemented as a conditional, single-attempt re-execution of host-verified functional failures.**
+
+- **Input:** A genuine functional assertion marked FAIL by Phase 4, with its original scenario, browser observations, action log, and screenshots.
+- **Processing responsibilities:**
+  - Trigger only for a Phase 4 `FAIL` explicitly marked `hostVerifiedFailure`; PASS, BLOCKED, SKIPPED, unverified FAIL, service errors (including 429/503/504), unavailable infrastructure, unsafe actions, and inconclusive evidence do not trigger it.
+  - Re-execute the same validated scenario, acceptance criteria, and verification checks once in a newly created and isolated Playwright MCP session. The existing executor retains its origin/tool/reference checks and action, request, recovery, and time budgets. A unique revalidation run ID also produces distinct task data.
+  - Conservatively skip revalidation for scenarios whose verification requires removal or whose intent/criterion describes destructive or potentially irreversible actions (for example, deleting, purchasing, paying, transferring, or sending communications).
+  - Classify the retry separately: FAIL → `CONFIRMED_FAILURE`; PASS → `FLAKY_OR_INCONSISTENT`; BLOCKED → `REVALIDATION_INCONCLUSIVE`.
+  - Never change the original scenario’s FAIL status. A retry PASS is inconsistent evidence, not a converted PASS. Prevent a second Phase 5 attempt for the same original run and scenario.
+- **Output artifacts:** The scenario’s JSON result contains a nested revalidation record with the original result and reason, separate revalidation attempt result and reason, classification, attempt count, both run IDs, action/recovery counts, and separate screenshot paths. Action-log entries and browser observations are correlated by original and revalidation run IDs. Markdown reporting includes the classification and retry outcome without replacing the original status.
+- **Exit criteria:** The eligible failure receives exactly one bounded attempt, or the attempt is explicitly BLOCKED with its reason. Original and retry results/evidence remain distinct. Non-eligible statuses never start a retry.
+
+## Phase 6 — Final Reporting
+
+**Status: Implemented as deterministic TypeScript reporting with a six-phase execution matrix, acceptance-criteria traceability, comprehensive scenario evidence, and dual-written run-scoped artifacts.**
+
+- **Input:** Phase 1–4 outputs, plus Phase 5 original/revalidation outputs if revalidation was triggered. Early exits (ingestion failure, non-RFQA, exploration/planning blockers) still produce an informative report.
+- **Processing responsibilities:**
+  - Generate deterministic JSON and Markdown reports from program-validated results; Gemini does not author overall run status or invent PASS/FAIL/observations/screenshots.
+  - Record each phase’s operational status as `COMPLETED`, `FAILED`, `BLOCKED`, or `NOT_RUN`, with timestamps, duration, artifact references, and errors. Phase operational status is distinct from scenario PASS/FAIL/BLOCKED/SKIPPED. Phase 5 `NOT_RUN` when no host-verified functional FAIL occurs is normal.
+  - For every scenario, report ID/title, acceptance criteria, preconditions, intended steps, verification strategy, browser actions, expected vs observed results, host-verified assertion outcomes, status, screenshots, duration, and Gemini/browser counts when recorded.
+  - Build acceptance-criteria traceability from host verification outcomes. A criterion is never marked PASS solely because a generated scenario references it; uncovered or unverified criteria remain `UNVERIFIED`.
+  - Include a dedicated revalidation section when Phase 5 ran: original failure/evidence, retry result/evidence, classification, and separate run IDs. Retain the original FAIL in aggregate totals even when revalidation passes (`FLAKY_OR_INCONSISTENT`).
+  - Clearly separate product FAIL outcomes from infrastructure/service BLOCKED outcomes (including Gemini 429/503/504) and readiness SKIPPED outcomes. Never write secrets, tokens, or API keys into reports.
+- **Output artifacts:**
+  - Latest convenience copies: `evidence/report.json`, `evidence/report.md`, `evidence/application-context.json`, `evidence/generated-scenarios.json`, `evidence/action-log.ndjson`
+  - Run-scoped copies: `evidence/runs/<runId>/` for the same report/context/scenario/log files, preserving earlier runs instead of only overwriting root paths
+  - Screenshots remain under `evidence/screenshots/<runId>/` (including revalidation subfolders when applicable)
+  - Artifact inventory in the report marks missing files as unavailable rather than fabricating links
+- **Exit criteria:** Reports accurately reflect retained evidence and preserve genuine PASS, FAIL, BLOCKED, and SKIPPED distinctions. An observed functional FAIL remains visible even if revalidation is inconsistent or succeeds. Offline reporter unit tests cover all-PASS, functional FAIL, Gemini BLOCKED, Phase 2/3 failures, partial Phase 4, Phase 5 not triggered, confirmed/flaky revalidation, missing evidence, and AC traceability rules.
+
+## Cross-phase safety, reliability, and cost controls
+
+These existing constraints apply to current execution and remain requirements for proposed phases:
+
+- **Untrusted input:** Treat issue text, page content, and accessibility labels as untrusted data. Never follow embedded instructions to reveal secrets, leave the target origin, run code, use the filesystem, change grading rules, or use tools outside the supplied list.
+- **Tool boundaries:** Discover Playwright MCP schemas at runtime. Expose only navigation, snapshot, click, type, and press-key actions to Gemini. Keep screenshot capture host-controlled with a fixed evidence path. Do not expose arbitrary code execution, filesystem, shell, or network tools to the model.
+- **Semantic targets:** Validate against the latest accessibility snapshot; never silently fall back to CSS/XPath or fabricated references.
+- **Origin and state isolation:** Constrain navigation to the target origin and verify snapshot URLs. Use a fresh MCP/browser context per scenario; do not reuse scenario state.
+- **Evidence and status:** A PASS requires evidence quotes that match actual browser observations for every applicable criterion and required screenshot evidence. A genuine contradiction may be FAIL. Missing/ambiguous evidence or service/infrastructure errors are BLOCKED. RFQA-not-ready issues are SKIPPED before Gemini/browser startup. Phase 5 does not change the original Phase 4 status.
+- **Timeouts and bounded recovery:** Keep finite Gemini/MCP operation timeouts, per-scenario action/time/request caps, bounded action recovery, and repeated-action loop detection. The Gemini SDK is configured for one HTTP attempt rather than its default five; service errors do not trigger application-level retries or unnecessary remaining scenario executions.
+- **Secrets and diagnostics:** Keep credentials in local `.env`; do not commit secrets. Gemini diagnostics may record request kind, model, duration, prompt character count, schema byte count, API status code, and retry count, but not API keys, prompts, schema contents, or other secrets.
+- **Cost:** Limit model requests through scenario/action/time bounds. `--scenario=SC-01` selects one generated scenario but does not skip scenario-plan generation. Do not call the live Gemini API in unit tests.
+- **GitHub readiness:** GitHub access is optional for public issues; use only a least-privilege token when needed for private issue reads. The RFQA readiness gate must continue to prevent model/browser work for non-ready issues.
+
+## Verification commands and interpretation
+
+- `npm run check` validates TypeScript types.
+- `npm test` runs deterministic local unit tests, including simulated Gemini 503/504/429, timeout, and successful responses. These are not live model results.
+- `npm run build` compiles the project.
+- `npm run qa:browser-smoke` checks configured-target Playwright MCP navigation/snapshot/screenshot infrastructure; it does not evaluate acceptance criteria.
+- `npm run qa:mcp-integration` exercises Playwright MCP against a local Todo fixture without Gemini; it does not test the configured target application or autonomous scenario reasoning.
+- A real autonomous UI test requires explicit authorization to use the configured Gemini API and target browser application. Its results must be reported separately from unit tests and deterministic MCP integration checks.

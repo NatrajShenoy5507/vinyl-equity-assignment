@@ -4,6 +4,7 @@ const safeToolNames = new Set([
   "browser_navigate",
   "browser_snapshot",
   "browser_click",
+  "browser_hover",
   "browser_type",
   "browser_press_key",
 ]);
@@ -12,6 +13,8 @@ const navigationArgs = z.object({ url: z.string().url() }).passthrough();
 const snapshotArgs = z.object({}).strict();
 const clickArgs = z.object({ target: z.string().optional(), ref: z.string().optional(), element: z.string().optional() }).passthrough()
   .refine((args) => /^e\d+$/.test(args.target ?? args.ref ?? ""), "Click requires an exact accessibility reference from the current snapshot, not a selector.");
+const hoverArgs = z.object({ target: z.string().optional(), ref: z.string().optional(), element: z.string().optional() }).passthrough()
+  .refine((args) => /^e\d+$/.test(args.target ?? args.ref ?? ""), "Hover requires an exact accessibility reference from the current snapshot, not a selector.");
 const typeArgs = z.object({ text: z.string().max(250), target: z.string().optional(), ref: z.string().optional(), element: z.string().optional() }).passthrough()
   .refine((args) => /^e\d+$/.test(args.target ?? args.ref ?? ""), "Typing requires an exact accessibility reference from the current snapshot, not a selector.");
 const pressArgs = z.object({ key: z.enum(["Enter", "Escape", "Tab", "Space", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) }).passthrough();
@@ -110,6 +113,7 @@ export function validateToolAction(
   const parsed = name === "browser_navigate" ? navigationArgs.safeParse(validated)
     : name === "browser_snapshot" ? snapshotArgs.safeParse(validated)
       : name === "browser_click" ? clickArgs.safeParse(validated)
+        : name === "browser_hover" ? hoverArgs.safeParse(validated)
         : name === "browser_type" ? typeArgs.safeParse(validated)
           : name === "browser_press_key" ? pressArgs.safeParse(validated)
             : z.never().safeParse(validated);

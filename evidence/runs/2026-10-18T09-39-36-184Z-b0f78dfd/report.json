@@ -1,0 +1,266 @@
+{
+  "runId": "2026-10-18T09-39-36-184Z-b0f78dfd",
+  "source": "mock",
+  "model": "gemini-3.1-flash-lite",
+  "issueNumber": 1,
+  "issueTitle": "Todo Management - Create, Complete, Filter and Delete",
+  "targetUrl": "https://demo.playwright.dev/todomvc/",
+  "startedAt": "2026-10-18T09:39:36.185Z",
+  "completedAt": "2026-10-18T09:40:16.397Z",
+  "blocker": "Gemini service request failed; remaining scenarios were not attempted. {\"error\":{\"code\":504,\"message\":\"Deadline expired before operation could complete.\",\"status\":\"DEADLINE_EXCEEDED\"}}",
+  "scenarios": [
+    {
+      "scenarioId": "SC-01",
+      "title": "Create, Complete, Filter, and Delete Todo Items",
+      "acceptanceCriteriaIds": [
+        "AC-01",
+        "AC-02",
+        "AC-03",
+        "AC-04"
+      ],
+      "status": "BLOCKED",
+      "expected": "The user can successfully manage the task lifecycle from creation through deletion.",
+      "observed": "The scenario could not be verified.",
+      "reason": "{\"error\":{\"code\":504,\"message\":\"Deadline expired before operation could complete.\",\"status\":\"DEADLINE_EXCEEDED\"}}",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-18T09-39-36-184Z-b0f78dfd\\SC-01-01.png"
+      ],
+      "actionCount": 0,
+      "recoveryCount": 0,
+      "preconditions": [
+        "User is on the TodoMVC homepage"
+      ],
+      "intendedSteps": [
+        {
+          "intent": "Enter a new task name into the input field and press enter",
+          "expectedObservation": "The task appears in the list"
+        },
+        {
+          "intent": "Click the checkbox associated with the task",
+          "expectedObservation": "The task is marked as completed"
+        },
+        {
+          "intent": "Create a second task and leave it active",
+          "expectedObservation": "Both tasks are visible in the list"
+        },
+        {
+          "intent": "Click the Active filter link",
+          "expectedObservation": "Only the active task is visible"
+        },
+        {
+          "intent": "Click the delete button for the active task",
+          "expectedObservation": "The task is removed from the list"
+        }
+      ],
+      "verificationStrategy": "Sequential verification of task lifecycle states using unique markers for each action.",
+      "browserActions": [
+        {
+          "toolName": "browser_navigate",
+          "arguments": {
+            "url": "https://demo.playwright.dev/todomvc/"
+          },
+          "rationale": "Open target application in an isolated scenario browser.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.goto('https://demo.playwright.dev/todomvc/');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-18T09-39-46-294Z.yml)\n### Events\n- New console entries: .playwright-mcp\\console-2026-10-18T09-39-46-027Z.log#L1-L2"
+        }
+      ],
+      "hostVerification": [],
+      "modelRequestCount": 1,
+      "executionDurationMs": 31437
+    }
+  ],
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Requirement Discovery",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-18T09:39:36.187Z",
+      "completedAt": "2026-10-18T09:39:36.192Z",
+      "durationMs": 5,
+      "outputArtifacts": [],
+      "errors": []
+    },
+    {
+      "phase": 2,
+      "name": "Application Exploration",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-18T09:39:36.192Z",
+      "completedAt": "2026-10-18T09:39:39.711Z",
+      "durationMs": 3519,
+      "outputArtifacts": [
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\application-context.json",
+        "F:\\vinyl-challenge\\evidence\\application-context.json",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-18T09-39-36-184Z-b0f78dfd\\exploration.png"
+      ],
+      "errors": []
+    },
+    {
+      "phase": 3,
+      "name": "Scenario Generation",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-18T09:39:39.712Z",
+      "completedAt": "2026-10-18T09:39:42.707Z",
+      "durationMs": 2995,
+      "outputArtifacts": [
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\generated-scenarios.json",
+        "F:\\vinyl-challenge\\evidence\\generated-scenarios.json"
+      ],
+      "errors": []
+    },
+    {
+      "phase": 4,
+      "name": "Autonomous Execution",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-18T09:39:42.708Z",
+      "completedAt": "2026-10-18T09:40:16.397Z",
+      "durationMs": 33689,
+      "outputArtifacts": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-18T09-39-36-184Z-b0f78dfd",
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\action-log.ndjson"
+      ],
+      "errors": [
+        "Gemini service request failed; remaining scenarios were not attempted. {\"error\":{\"code\":504,\"message\":\"Deadline expired before operation could complete.\",\"status\":\"DEADLINE_EXCEEDED\"}}"
+      ]
+    },
+    {
+      "phase": 5,
+      "name": "Conditional Failure Revalidation",
+      "status": "NOT_RUN",
+      "outputArtifacts": [],
+      "errors": [
+        "No host-verified functional failure; revalidation was not required."
+      ]
+    },
+    {
+      "phase": 6,
+      "name": "Final Reporting",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-18T09:40:16.397Z",
+      "completedAt": "2026-10-18T09:40:16.397Z",
+      "durationMs": 0,
+      "outputArtifacts": [
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\report.json",
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\report.md",
+        "F:\\vinyl-challenge\\evidence\\report.json",
+        "F:\\vinyl-challenge\\evidence\\report.md"
+      ],
+      "errors": []
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-01",
+      "description": "A new task with valid text appears in the list.",
+      "scenarioIds": [
+        "SC-01"
+      ],
+      "status": "UNVERIFIED",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-18T09-39-36-184Z-b0f78dfd\\SC-01-01.png"
+      ]
+    },
+    {
+      "id": "AC-02",
+      "description": "A user can mark a created task complete and see its completed state.",
+      "scenarioIds": [
+        "SC-01"
+      ],
+      "status": "UNVERIFIED",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-18T09-39-36-184Z-b0f78dfd\\SC-01-01.png"
+      ]
+    },
+    {
+      "id": "AC-03",
+      "description": "The Active filter hides completed tasks and shows active tasks.",
+      "scenarioIds": [
+        "SC-01"
+      ],
+      "status": "UNVERIFIED",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-18T09-39-36-184Z-b0f78dfd\\SC-01-01.png"
+      ]
+    },
+    {
+      "id": "AC-04",
+      "description": "A user can remove a task and it no longer appears in the list.",
+      "scenarioIds": [
+        "SC-01"
+      ],
+      "status": "UNVERIFIED",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-18T09-39-36-184Z-b0f78dfd\\SC-01-01.png"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "label": "Application context (run)",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\application-context.json",
+      "available": true
+    },
+    {
+      "label": "Application context (latest)",
+      "path": "F:\\vinyl-challenge\\evidence\\application-context.json",
+      "available": true
+    },
+    {
+      "label": "Generated scenarios (run)",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\generated-scenarios.json",
+      "available": true
+    },
+    {
+      "label": "Generated scenarios (latest)",
+      "path": "F:\\vinyl-challenge\\evidence\\generated-scenarios.json",
+      "available": true
+    },
+    {
+      "label": "Screenshots directory",
+      "path": "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-18T09-39-36-184Z-b0f78dfd",
+      "available": true
+    },
+    {
+      "label": "Run report JSON",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\report.json",
+      "available": true
+    },
+    {
+      "label": "Run report Markdown",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\report.md",
+      "available": true
+    },
+    {
+      "label": "Latest report JSON",
+      "path": "F:\\vinyl-challenge\\evidence\\report.json",
+      "available": true
+    },
+    {
+      "label": "Latest report Markdown",
+      "path": "F:\\vinyl-challenge\\evidence\\report.md",
+      "available": true
+    },
+    {
+      "label": "Action log (latest)",
+      "path": "F:\\vinyl-challenge\\evidence\\action-log.ndjson",
+      "available": true
+    },
+    {
+      "label": "Action log (run)",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-18T09-39-36-184Z-b0f78dfd\\action-log.ndjson",
+      "available": true
+    }
+  ],
+  "environment": {
+    "nodeVersion": "v22.20.0",
+    "platform": "win32",
+    "architecture": "x64",
+    "headless": false
+  },
+  "status": "BLOCKED",
+  "totals": {
+    "PASS": 0,
+    "FAIL": 0,
+    "BLOCKED": 1,
+    "SKIPPED": 0
+  }
+}

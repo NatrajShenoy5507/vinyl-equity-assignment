@@ -1,33 +1,276 @@
-import { describe, expect, it } from "vitest";
-import { selectScenarios, validateScenarioPlan } from "../src/agents/planner.js";
-import type { NormalizedIssue } from "../src/schemas.js";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createScenarioPlan,
+  generateScenarioPlan,
+  selectScenarios,
+  validateApplicationContext,
+  validateScenarioPlan,
+  type PlannerAgent,
+} from "../src/agents/planner.js";
+import { applicationContextSchema, type ApplicationContext } from "../src/browser/explorer.js";
+import type { NormalizedIssue, ScenarioPlan } from "../src/schemas.js";
 
 const issue: NormalizedIssue = {
-  issueNumber: 1, title: "Todo", status: "RFQA", targetUrl: "https://example.test/",
-  description: "Story", acceptanceCriteria: [
-    { id: "AC-01", description: "Create item." },
-    { id: "AC-02", description: "Delete item." },
+  issueNumber: 1,
+  title: "Manage records",
+  status: "RFQA",
+  targetUrl: "https://example.test/",
+  description: "As a user, I can search and manage records.",
+  acceptanceCriteria: [
+    { id: "AC-01", description: "A user can create a record." },
+    { id: "AC-02", description: "A user can remove a record." },
   ],
 };
-const scenario = {
-  id: "SC-01", title: "Create and delete", acceptanceCriteriaIds: ["AC-01", "AC-02"],
-  preconditions: [], steps: [{ intent: "Create", expectedObservation: "Visible" }], expectedResult: "Item is removed",
-};
 
-describe("scenario plan validation", () => {
-  it("accepts schema-valid plans with complete AC coverage", () => {
-    expect(validateScenarioPlan({ issueNumber: 1, scenarios: [scenario] }, issue).scenarios).toHaveLength(1);
+function makeApplicationContext(overrides: Partial<ApplicationContext> = {}): ApplicationContext {
+  return applicationContextSchema.parse({
+    schemaVersion: 1,
+    runId: "exploration-01",
+    status: "PASS",
+    startedAt: "2026-10-18T08:00:00.000Z",
+    completedAt: "2026-10-18T08:00:03.000Z",
+    targetUrl: issue.targetUrl,
+    page: {
+      title: "Observed application",
+      currentUrl: issue.targetUrl,
+      observedAt: "2026-10-18T08:00:02.000Z",
+      accessibilitySnapshot: '- textbox "Search items" [ref=e8]\n- button "Add record" [ref=e9]',
+      visibleSemanticControls: [
+        { role: "textbox", name: "Search items", reference: "e8", observedAttributes: ["active"] },
+        { role: "button", name: "Add record", reference: "e9", observedAttributes: [] },
+      ],
+    },
+    evidence: {
+      screenshot: "screenshots/exploration-01/exploration.png",
+      accessibilitySnapshotSource: "page.accessibilitySnapshot",
+    },
+    sourceReferences: {
+      targetUrl: issue.targetUrl,
+      navigationTool: "browser_navigate",
+      snapshotTool: "browser_snapshot",
+      screenshotTool: "browser_take_screenshot",
+    },
+    unknowns: ["Some controls may appear only after a record has been created."],
+    diagnostics: [],
+    ...overrides,
   });
-  it("rejects invalid JSON shapes, missing coverage, unknown ACs and duplicate IDs", () => {
-    expect(() => validateScenarioPlan({ nope: true }, issue)).toThrow(/failed validation/);
-    expect(() => validateScenarioPlan({ issueNumber: 1, scenarios: [{ ...scenario, acceptanceCriteriaIds: ["AC-01"] }] }, issue)).toThrow(/does not cover/);
-    expect(() => validateScenarioPlan({ issueNumber: 1, scenarios: [{ ...scenario, acceptanceCriteriaIds: ["AC-01", "AC-99"] }] }, issue)).toThrow(/unknown/);
-    expect(() => validateScenarioPlan({ issueNumber: 1, scenarios: [scenario, scenario] }, issue)).toThrow(/duplicate/);
+}
+
+function makeScenario(context: ApplicationContext = makeApplicationContext()) {
+  const observed = context.page.visibleSemanticControls[0]!;
+  return {
+    id: "SC-01",
+    title: "Create and remove a record",
+    acceptanceCriteriaIds: ["AC-01", "AC-02"],
+    preconditions: ["The application is open in its initial state."],
+    steps: [
+      { intent: "Create a record with unique test data.", expectedObservation: "The new record is visible." },
+      { intent: "Inspect the new record for any available removal control.", expectedObservation: "Any available removal outcome is observed; an unavailable control remains unknown." },
+    ],
+    verificationStrategy: "Verify creation and removal from fresh accessibility snapshots and actual browser results.",
+    verificationChecks: [
+      { acceptanceCriterionId: "AC-01", kind: "visible", expectedVisible: ["{{uniqueTaskText}}"], expectedAbsent: [] },
+      { acceptanceCriterionId: "AC-02", kind: "absent_after_seen", expectedVisible: ["{{uniqueTaskText}}"], expectedAbsent: ["{{uniqueTaskText}}"] },
+    ],
+    relevantApplicationContext: [`${observed.role}: ${observed.name} (${observed.observedAttributes.join(", ")})`],
+    unknownControlsToDiscover: ["After creating a record, inspect fresh accessibility data for any record-specific removal control; do not assume one exists."],
+    expectedResult: "The record is created and the removal criterion is evaluated using observed evidence.",
+  };
+}
+
+function validPlan(context: ApplicationContext = makeApplicationContext()): ScenarioPlan {
+  return { issueNumber: issue.issueNumber, scenarios: [makeScenario(context)] };
+}
+
+class FakePlanner implements PlannerAgent {
+  readonly model = "gemini-test-model";
+  readonly prompts: string[] = [];
+  readonly schemas: Array<Record<string, unknown>> = [];
+  calls = 0;
+
+  constructor(private readonly respond: (prompt: string, call: number) => unknown | Error) {}
+
+  async generateJson(prompt: string, schema: Record<string, unknown>): Promise<unknown> {
+    this.calls += 1;
+    this.prompts.push(prompt);
+    this.schemas.push(schema);
+    const response = this.respond(prompt, this.calls);
+    if (response instanceof Error) throw response;
+    return response;
+  }
+}
+
+const temporaryDirectories: string[] = [];
+
+async function makePaths(): Promise<{ cachePath: string; artifactPath: string }> {
+  const directory = await mkdtemp(resolve(tmpdir(), "scenario-planner-"));
+  temporaryDirectories.push(directory);
+  return {
+    cachePath: resolve(directory, "scenario-plan-cache.json"),
+    artifactPath: resolve(directory, "generated-scenarios.json"),
+  };
+}
+
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+describe("context-aware scenario plan validation", () => {
+  it("generates a validated plan from both issue requirements and observed application context", async () => {
+    const context = makeApplicationContext();
+    const agent = new FakePlanner(() => validPlan(context));
+    const plan = await createScenarioPlan(agent, issue, context);
+
+    expect(plan.scenarios).toHaveLength(1);
+    expect(plan.scenarios[0]?.acceptanceCriteriaIds).toEqual(["AC-01", "AC-02"]);
+    expect(plan.scenarios[0]?.verificationStrategy).toContain("fresh accessibility snapshots");
+    expect(plan.scenarios[0]?.unknownControlsToDiscover[0]).toContain("do not assume");
+    expect(agent.prompts[0]).toContain(issue.description);
+    expect(agent.prompts[0]).toContain("A user can remove a record.");
+    expect(agent.prompts[0]).toContain("Observed application");
+    expect(agent.prompts[0]).toContain("Search items");
+    expect(agent.prompts[0]).not.toContain("[ref=e8]");
+    expect(agent.prompts[0]).not.toContain("accessibilitySnapshot");
+    expect(agent.schemas[0]?.additionalProperties).toBe(false);
+    expect(agent.schemas[0]?.required).toContain("scenarios");
   });
+
+  it("requires complete coverage, rejects unknown criteria and duplicate IDs", () => {
+    const context = makeApplicationContext();
+    expect(validateScenarioPlan(validPlan(context), issue, context).scenarios).toHaveLength(1);
+    expect(() => validateScenarioPlan({ ...validPlan(context), scenarios: [{ ...makeScenario(context), acceptanceCriteriaIds: ["AC-01"] }] }, issue, context)).toThrow(/does not cover: AC-02/);
+    expect(() => validateScenarioPlan({ ...validPlan(context), scenarios: [{ ...makeScenario(context), acceptanceCriteriaIds: ["AC-01", "AC-99"] }] }, issue, context)).toThrow(/unknown acceptance criterion AC-99/);
+    expect(() => validateScenarioPlan({ ...validPlan(context), scenarios: [makeScenario(context), { ...makeScenario(context) }] }, issue, context)).toThrow(/duplicate scenario IDs/);
+  });
+
+  it("rejects missing, malformed, blocked, or mismatched application context", () => {
+    expect(() => validateApplicationContext({}, issue)).toThrow(/Application context is malformed/);
+    expect(() => validateApplicationContext(makeApplicationContext({ status: "BLOCKED" }), issue)).toThrow(/not successful/);
+    expect(() => validateApplicationContext({
+      ...makeApplicationContext(),
+      page: { ...makeApplicationContext().page, accessibilitySnapshot: null },
+    }, issue)).toThrow(/malformed|missing the accessibility snapshot/i);
+    const otherTarget = makeApplicationContext({ targetUrl: "https://elsewhere.test/" });
+    expect(() => validateApplicationContext(otherTarget, issue)).toThrow(/does not match/);
+  });
+
+  it("permits unknown controls to be planned for discovery but rejects invented observed affordances", () => {
+    const context = makeApplicationContext();
+    const plan = validPlan(context);
+    expect(plan.scenarios[0]?.unknownControlsToDiscover).toHaveLength(1);
+    const scenarioWithInventedControl = {
+      ...makeScenario(context),
+      relevantApplicationContext: ["checkbox: Complete record"],
+    };
+    expect(() => validateScenarioPlan({ issueNumber: 1, scenarios: [scenarioWithInventedControl] }, issue, context)).toThrow(/unobserved application affordance/);
+  });
+
+  it.each([
+    ["stale reference", (scenario: ReturnType<typeof makeScenario>) => ({ ...scenario, expectedResult: "Click target=e8." })],
+    ["CSS selector", (scenario: ReturnType<typeof makeScenario>) => ({ ...scenario, expectedResult: "Use #record-delete to remove it." })],
+    ["XPath selector", (scenario: ReturnType<typeof makeScenario>) => ({ ...scenario, expectedResult: "Use xpath=//button." })],
+  ])("rejects %s text from executable plans", (_label, modifyScenario) => {
+    const context = makeApplicationContext();
+    expect(() => validateScenarioPlan({
+      issueNumber: 1,
+      scenarios: [modifyScenario(makeScenario(context))],
+    }, issue, context)).toThrow(/selector, script, or stale/);
+  });
+
+  it("repairs invalid Gemini JSON once and fails without fabricating a plan if still invalid", async () => {
+    const context = makeApplicationContext();
+    const repaired = new FakePlanner((_prompt, call) => call === 1
+      ? new Error("Gemini returned invalid JSON: unexpected token")
+      : validPlan(context));
+    await expect(createScenarioPlan(repaired, issue, context)).resolves.toEqual(validPlan(context));
+    expect(repaired.calls).toBe(2);
+
+    const invalid = new FakePlanner(() => new Error("Gemini returned invalid JSON: unexpected token"));
+    await expect(createScenarioPlan(invalid, issue, context)).rejects.toThrow(/planning failed after one format-repair attempt/);
+    expect(invalid.calls).toBe(2);
+
+    const quotaFailure = new FakePlanner(() => Object.assign(new Error("Gemini 429 quota exhausted"), { status: 429 }));
+    await expect(createScenarioPlan(quotaFailure, issue, context)).rejects.toThrow(/quota exhausted/);
+    expect(quotaFailure.calls).toBe(1);
+  });
+
+  it("records model-generated scenarios, acceptance mapping, and application context provenance", async () => {
+    const paths = await makePaths();
+    const context = makeApplicationContext();
+    const agent = new FakePlanner(() => validPlan(context));
+    const artifact = await generateScenarioPlan(agent, issue, context, "run-01", {
+      ...paths,
+      logAction: async () => undefined,
+    });
+    const persisted = JSON.parse(await readFile(paths.artifactPath, "utf8"));
+
+    expect(artifact).toEqual(persisted);
+    expect(artifact).toMatchObject({
+      runId: "run-01",
+      issueNumber: 1,
+      modelName: agent.model,
+      applicationContextReference: { path: "evidence/application-context.json", runId: context.runId },
+      source: "gemini",
+      cache: { status: "MISS", invalidationReason: "No validated plan cache exists." },
+      acceptanceCriteriaMapping: { "AC-01": ["SC-01"], "AC-02": ["SC-01"] },
+    });
+    expect(artifact.generatedAt).toBeTruthy();
+    expect(artifact.scenarios).toEqual(validPlan(context).scenarios);
+  });
+
+  it("does not create a plan artifact or cache when Gemini never returns a valid plan", async () => {
+    const paths = await makePaths();
+    const context = makeApplicationContext();
+    const agent = new FakePlanner(() => new Error("Gemini returned invalid JSON: unexpected token"));
+    await expect(generateScenarioPlan(agent, issue, context, "failed-run", {
+      ...paths,
+      logAction: async () => undefined,
+    })).rejects.toThrow(/planning failed after one format-repair attempt/);
+    await expect(readFile(paths.artifactPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(paths.cachePath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("reuses only a validated matching plan and regenerates when the observed application context changes", async () => {
+    const paths = await makePaths();
+    const context = makeApplicationContext();
+    const agent = new FakePlanner(() => validPlan(context));
+    const first = await generateScenarioPlan(agent, issue, context, "run-01", {
+      ...paths,
+      logAction: async () => undefined,
+    });
+    const reused = await generateScenarioPlan(agent, issue, context, "run-02", {
+      ...paths,
+      logAction: async () => undefined,
+    });
+    expect(first.cache.status).toBe("MISS");
+    expect(reused.cache.status).toBe("HIT");
+    expect(reused.source).toBe("validated-cache");
+    expect(reused.runId).toBe("run-02");
+    expect(agent.calls).toBe(1);
+
+    const changedContext = makeApplicationContext({
+      page: { ...context.page, title: "Observed application version 2" },
+    });
+    const regenerated = await generateScenarioPlan(agent, issue, changedContext, "run-03", {
+      ...paths,
+      logAction: async () => undefined,
+    });
+    expect(regenerated.cache).toEqual({
+      status: "MISS",
+      invalidationReason: "Observed application context changed.",
+    });
+    expect(regenerated.source).toBe("gemini");
+    expect(agent.calls).toBe(2);
+  });
+
   it("selects only the requested generated scenario and rejects unknown IDs", () => {
-    const second = { ...scenario, id: "SC-02", title: "Complete" };
-    expect(selectScenarios([scenario, second], "SC-02")).toEqual([second]);
-    expect(selectScenarios([scenario, second])).toEqual([scenario, second]);
-    expect(() => selectScenarios([scenario], "SC-99")).toThrow(/not found in the generated plan/);
+    const scenarios = validPlan().scenarios;
+    expect(selectScenarios(scenarios, "SC-01")).toEqual(scenarios);
+    expect(selectScenarios(scenarios)).toEqual(scenarios);
+    expect(() => selectScenarios(scenarios, "SC-99")).toThrow(/not found in the generated plan/);
   });
 });

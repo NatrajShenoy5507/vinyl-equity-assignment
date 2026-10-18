@@ -13,6 +13,7 @@
     "test": "vitest run",
     "qa:mock": "tsx src/index.ts --source=mock",
     "qa:github": "tsx src/index.ts --source=github",
+    "qa:explore": "tsx src/browser/explore-cli.ts",
     "qa:browser-smoke": "tsx src/browser/smoke.ts",
     "qa:mcp-integration": "tsx src/browser/todo-integration.ts"
   },

@@ -1,6 +1,14 @@
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
-import { executorDecisionSchema, type ExecutorDecision, type NormalizedIssue, type PlannedScenario, type ScenarioResult } from "../schemas.js";
+import {
+  executorDecisionSchema,
+  type ExecutorDecision,
+  type NormalizedIssue,
+  type PlannedScenario,
+  type ScenarioBrowserAction,
+  type ScenarioResult,
+  type ScenarioVerification,
+} from "../schemas.js";
 import { executorPrompt } from "../prompts/executor-prompt.js";
 import { getPermittedTools, validateToolAction, type DiscoveredTool } from "../browser/tool-policy.js";
 import { appendActionLog } from "../evidence/logger.js";
@@ -18,6 +26,7 @@ export interface BrowserAgent {
 
 interface ExecutorLimits {
   maxActions: number;
+  maxModelRequests?: number;
   maxSeconds: number;
   maxRecoveryRetries: number;
 }
@@ -78,14 +87,123 @@ export interface ExecuteInput {
   limits: ExecutorLimits;
 }
 
+interface ObservationSnapshot {
+  text: string;
+  stage: "initial" | "post_action";
+}
+
+export interface VerificationCheckResult {
+  acceptanceCriterionId: string;
+  status: "PASS" | "FAIL" | "BLOCKED";
+  reason: string;
+  evidence: string[];
+}
+
+function expandUniqueTaskText(value: string, uniqueTaskText: string): string {
+  return value.replaceAll("{{uniqueTaskText}}", uniqueTaskText);
+}
+
+function checkStateNearText(snapshot: string, subject: string): "checked" | "unchecked" | "unknown" {
+  const lines = snapshot.split(/\r?\n/);
+  const subjectLine = lines.findIndex((line) => line.includes(subject));
+  if (subjectLine < 0) return "unknown";
+  const nearby = lines.slice(Math.max(0, subjectLine - 6), Math.min(lines.length, subjectLine + 7)).join("\n");
+  if (/\bcheckbox\b[^\r\n]*(?:\[checked\]|\bchecked\b)|(?:\[checked\]|\bchecked\b)[^\r\n]*\bcheckbox\b/i.test(nearby)) return "checked";
+  if (/\bcheckbox\b[^\r\n]*(?:\[unchecked\]|\bunchecked\b)|(?:\[unchecked\]|\bunchecked\b)[^\r\n]*\bcheckbox\b/i.test(nearby)) return "unchecked";
+  return "unknown";
+}
+
+function isVisibleListItem(snapshot: string, subject: string): boolean {
+  const lines = snapshot.split(/\r?\n/);
+  const subjectLine = lines.findIndex((line) => line.includes(subject));
+  if (subjectLine < 0) return false;
+  if (/^\s*-\s+listitem\b/i.test(lines[subjectLine]!)) return true;
+  const subjectIndent = lines[subjectLine]!.match(/^\s*/)?.[0].length ?? 0;
+  for (let index = subjectLine; index >= 0; index -= 1) {
+    const role = lines[index]!.match(/^(\s*)-\s+([a-z][\w-]*)\b/i);
+    if (!role) continue;
+    const roleIndent = role[1]!.length;
+    if (roleIndent >= subjectIndent && index !== subjectLine) continue;
+    return role[2]!.toLowerCase() === "listitem";
+  }
+  return false;
+}
+
+function hasActiveFilter(snapshot: string): boolean {
+  return /(?:link|tab|button)\s+"Active"(?=[^\r\n]*(?:\[current\]|\[selected\]|\[checked\]))/i.test(snapshot);
+}
+
+export function verifyScenarioChecks(
+  scenario: PlannedScenario,
+  issue: NormalizedIssue,
+  uniqueTaskText: string,
+  snapshots: ObservationSnapshot[],
+): VerificationCheckResult[] {
+  const finalSnapshot = [...snapshots].reverse().find(({ stage }) => stage === "post_action")?.text ?? "";
+  return scenario.verificationChecks.map((check) => {
+    if (!scenario.acceptanceCriteriaIds.includes(check.acceptanceCriterionId)
+      || !issue.acceptanceCriteria.some(({ id }) => id === check.acceptanceCriterionId)) {
+      return { acceptanceCriterionId: check.acceptanceCriterionId, status: "BLOCKED", reason: "Verification check references an unknown acceptance criterion.", evidence: [] };
+    }
+    const expectedVisible = check.expectedVisible.map((value) => expandUniqueTaskText(value, uniqueTaskText));
+    const expectedAbsent = check.expectedAbsent.map((value) => expandUniqueTaskText(value, uniqueTaskText));
+    const evidence = finalSnapshot ? [finalSnapshot] : [];
+    if (!finalSnapshot) {
+      return { acceptanceCriterionId: check.acceptanceCriterionId, status: "BLOCKED", reason: "No post-action accessibility snapshot is available for independent verification.", evidence };
+    }
+    if (check.kind === "visible") {
+      const missing = expectedVisible.filter((value) => !isVisibleListItem(finalSnapshot, value));
+      const unexpectedlyVisible = expectedAbsent.filter((value) => isVisibleListItem(finalSnapshot, value));
+      return missing.length === 0 && unexpectedlyVisible.length === 0
+        ? { acceptanceCriterionId: check.acceptanceCriterionId, status: "PASS", reason: "Required content is present and prohibited content is absent in the final observation.", evidence }
+        : { acceptanceCriterionId: check.acceptanceCriterionId, status: "BLOCKED", reason: `Visible-content check is inconclusive; missing: ${missing.join(", ") || "none"}; unexpectedly visible: ${unexpectedlyVisible.join(", ") || "none"}.`, evidence };
+    }
+    if (check.kind === "absent_after_seen") {
+      const subject = expectedVisible[0]!;
+      const wasObserved = snapshots.some(({ text }) => isVisibleListItem(text, subject));
+      if (!wasObserved) return { acceptanceCriterionId: check.acceptanceCriterionId, status: "BLOCKED", reason: `Cannot verify removal because "${subject}" was never observed before the final state.`, evidence };
+      const remaining = expectedAbsent.filter((value) => isVisibleListItem(finalSnapshot, value));
+      return remaining.length === 0
+        ? { acceptanceCriterionId: check.acceptanceCriterionId, status: "PASS", reason: "The item was observed before removal and is absent in the final post-action snapshot.", evidence }
+        : { acceptanceCriterionId: check.acceptanceCriterionId, status: "FAIL", reason: `The item expected to be removed is still visible: ${remaining.join(", ")}.`, evidence };
+    }
+    if (check.kind === "checked") {
+      const subject = expectedVisible[0]!;
+      if (!isVisibleListItem(finalSnapshot, subject)) return { acceptanceCriterionId: check.acceptanceCriterionId, status: "BLOCKED", reason: `Cannot verify completion because "${subject}" is not visible as a semantic list item in the final observation.`, evidence };
+      const state = checkStateNearText(finalSnapshot, subject);
+      if (state === "checked") return { acceptanceCriterionId: check.acceptanceCriterionId, status: "PASS", reason: "The subject is visible with a checked checkbox state in the final accessibility snapshot.", evidence };
+      if (state === "unchecked") return { acceptanceCriterionId: check.acceptanceCriterionId, status: "FAIL", reason: `The subject "${subject}" is explicitly observed with an unchecked checkbox.`, evidence };
+      return { acceptanceCriterionId: check.acceptanceCriterionId, status: "BLOCKED", reason: `No reliable checked/unchecked checkbox state was observed for "${subject}".`, evidence };
+    }
+    const priorSnapshots = snapshots.filter(({ stage }) => stage === "initial");
+    const expectedItemsObserved = [...expectedVisible, ...expectedAbsent].every((value) =>
+      priorSnapshots.some(({ text }) => isVisibleListItem(text, value)) || snapshots.slice(1, -1).some(({ text }) => isVisibleListItem(text, value)));
+    if (!expectedItemsObserved) return { acceptanceCriterionId: check.acceptanceCriterionId, status: "BLOCKED", reason: "Filter verification requires included and excluded test items to have been observed before the final filter result.", evidence };
+    if (!hasActiveFilter(finalSnapshot)) return { acceptanceCriterionId: check.acceptanceCriterionId, status: "BLOCKED", reason: "The final accessibility snapshot does not show that the Active filter is selected.", evidence };
+    const missing = expectedVisible.filter((value) => !isVisibleListItem(finalSnapshot, value));
+    const visibleExcluded = expectedAbsent.filter((value) => isVisibleListItem(finalSnapshot, value));
+    return missing.length === 0 && visibleExcluded.length === 0
+      ? { acceptanceCriterionId: check.acceptanceCriterionId, status: "PASS", reason: "The selected Active filter includes active items and excludes completed items.", evidence }
+      : { acceptanceCriterionId: check.acceptanceCriterionId, status: "FAIL", reason: `Active filter contradicted expected contents; missing active items: ${missing.join(", ") || "none"}; visible completed items: ${visibleExcluded.join(", ") || "none"}.`, evidence };
+  });
+}
+
 function textFromTool(result: { text: string; raw: unknown }): string {
   return result.text || JSON.stringify(result.raw);
 }
 
 function parseDecision(value: unknown): ExecutorDecision {
   const parsed = executorDecisionSchema.safeParse(value);
-  if (!parsed.success) throw new Error(`Gemini executor response failed validation: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`);
+  if (!parsed.success) throw new Error(`Gemini executor response failed validation: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "decision"}: ${issue.message}`).join("; ")}`);
   return parsed.data;
+}
+
+function scenarioPlanFields(scenario: PlannedScenario): Pick<ScenarioResult, "preconditions" | "intendedSteps" | "verificationStrategy"> {
+  return {
+    preconditions: [...scenario.preconditions],
+    intendedSteps: scenario.steps.map((step) => ({ ...step })),
+    verificationStrategy: scenario.verificationStrategy,
+  };
 }
 
 function blockedResult(scenario: PlannedScenario, issue: NormalizedIssue, reason: string, actionCount: number, recoveryCount: number, evidence: string[]): ScenarioResult {
@@ -100,6 +218,7 @@ function blockedResult(scenario: PlannedScenario, issue: NormalizedIssue, reason
     evidence,
     actionCount,
     recoveryCount,
+    ...scenarioPlanFields(scenario),
   };
 }
 
@@ -111,12 +230,25 @@ function verifySnapshotOrigin(snapshot: string, targetUrl: string): void {
   if (actualOrigin !== expectedOrigin) throw new Error(`Browser navigated outside the allowed target origin: ${actualOrigin}`);
 }
 
-export async function executeScenario(input: ExecuteInput): Promise<ScenarioResult> {
+async function captureSnapshot(browser: BrowserAgent, issue: NormalizedIssue, deadline: number) {
+  const args = validateToolAction("browser_snapshot", {}, browser.discoveredTools, issue.targetUrl);
+  return browser.call("browser_snapshot", args, Math.min(20_000, Math.max(1, deadline - Date.now())));
+}
+
+interface ExecutorTrace {
+  modelRequestCount: number;
+  browserActions: ScenarioBrowserAction[];
+  hostVerification: ScenarioVerification[];
+}
+
+async function executeScenarioInternal(input: ExecuteInput, trace: ExecutorTrace): Promise<ScenarioResult> {
   const { agent, browser, issue, scenario, runId, scenarioIndex, screenshotDirectory, limits } = input;
   const deadline = Date.now() + limits.maxSeconds * 1000;
   const evidence: string[] = [];
   const history: Array<{ toolName: string; result: string }> = [];
+  const observations: ObservationSnapshot[] = [];
   let actionCount = 0;
+  let modelRequestCount = 0;
   let screenshotCount = 0;
   let recoveryCount = 0;
   let latestSnapshot = "";
@@ -126,6 +258,7 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
   let unchangedActionCount = 0;
   const tools = getPermittedTools(browser.discoveredTools);
   const uniqueTaskText = `QA-${runId}-${scenario.id}`;
+  const maxModelRequests = limits.maxModelRequests ?? limits.maxActions + limits.maxRecoveryRetries + 1;
   const screenshot = async () => {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) throw new Error("Scenario time limit reached before screenshot capture.");
@@ -135,17 +268,33 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
     await access(path);
     evidence.push(path);
   };
-  const record = async (data: Record<string, unknown>) => appendActionLog({ timestamp: new Date().toISOString(), runId, scenarioId: scenario.id, acceptanceCriteriaIds: scenario.acceptanceCriteriaIds, ...data });
+  const record = async (data: Record<string, unknown>) => appendActionLog({
+    timestamp: new Date().toISOString(),
+    runId,
+    scenarioId: scenario.id,
+    acceptanceCriteriaIds: scenario.acceptanceCriteriaIds,
+    requestCount: modelRequestCount,
+    ...data,
+  });
 
   try {
-    const navigation = await browser.call("browser_navigate", { url: issue.targetUrl });
+    const navigationArgs = validateToolAction("browser_navigate", { url: issue.targetUrl }, browser.discoveredTools, issue.targetUrl);
+    const navigation = await browser.call("browser_navigate", navigationArgs, Math.min(20_000, Math.max(1, deadline - Date.now())));
     if (navigation.isError) throw new Error(`Navigation failed: ${navigation.text}`);
-    await record({ toolName: "browser_navigate", arguments: { url: issue.targetUrl }, result: navigation.text.slice(0, 1500), rationale: "Open target application for isolated scenario." });
-    const initial = await browser.call("browser_snapshot");
+    trace.browserActions.push({
+      toolName: "browser_navigate",
+      arguments: navigationArgs,
+      rationale: "Open target application in an isolated scenario browser.",
+      status: "ok",
+      result: navigation.text.slice(0, 1500),
+    });
+    await record({ toolName: "browser_navigate", arguments: navigationArgs, result: navigation.text.slice(0, 1500), rationale: "Open target application in an isolated scenario browser." });
+    const initial = await captureSnapshot(browser, issue, deadline);
     if (initial.isError || initial.text.trim().length === 0) throw new Error(`Initial browser snapshot unavailable: ${initial.text}`);
     latestSnapshot = initial.text;
     verifySnapshotOrigin(latestSnapshot, issue.targetUrl);
     history.push({ toolName: "browser_snapshot", result: latestSnapshot.slice(0, 4000) });
+    observations.push({ text: latestSnapshot, stage: "initial" });
     await record({ toolName: "browser_snapshot", result: latestSnapshot.slice(0, 1500), rationale: "Observe accessible page state before acting." });
     await screenshot();
   } catch (error) {
@@ -156,8 +305,15 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
 
   while (Date.now() < deadline) {
     try {
+      if (modelRequestCount >= maxModelRequests) {
+        const reason = `Maximum Gemini executor request budget exhausted (${maxModelRequests}).`;
+        await record({ toolName: "executor", status: "blocked", requestCount: modelRequestCount, result: reason });
+        return blockedResult(scenario, issue, reason, actionCount, recoveryCount, evidence);
+      }
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) return blockedResult(scenario, issue, "Scenario time limit reached before the next Gemini decision.", actionCount, recoveryCount, evidence);
+      modelRequestCount += 1;
+      trace.modelRequestCount = modelRequestCount;
       const proposed = await agent.generateJson(executorPrompt({
         issue,
         scenario,
@@ -175,24 +331,37 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
         const missing = scenario.acceptanceCriteriaIds.filter((id) => !assessments.has(id));
         if (missing.length > 0) return blockedResult(scenario, issue, `Final evidence omitted criteria: ${missing.join(", ")}.`, actionCount, recoveryCount, evidence);
         const unproven = decision.assessments.find((assessment) =>
-          !history.some((observation) => observation.result.includes(assessment.observedEvidence)));
-        if (unproven) return blockedResult(scenario, issue, `The claimed evidence for ${unproven.acceptanceCriteriaId} does not exactly match any observed browser result.`, actionCount, recoveryCount, evidence);
-        await screenshot();
-        const failed = decision.assessments.find((assessment) => !assessment.meets);
-        const status = failed ? "FAIL" : evidence.length > 0 ? "PASS" : "BLOCKED";
+          !observations.some((observation) => observation.stage === "post_action" && observation.text.includes(assessment.observedEvidence)));
+        if (unproven) return blockedResult(scenario, issue, `The claimed evidence for ${unproven.acceptanceCriteriaId} does not exactly match any post-action browser snapshot.`, actionCount, recoveryCount, evidence);
+        const checks = verifyScenarioChecks(scenario, issue, uniqueTaskText, observations);
+        trace.hostVerification = checks;
+        const failedCheck = checks.find((check) => check.status === "FAIL");
+        const blockedCheck = checks.find((check) => check.status === "BLOCKED");
+        const status = failedCheck ? "FAIL"
+          : blockedCheck || decision.assessments.some((assessment) => !assessment.meets) ? "BLOCKED" : "PASS";
+        const reason = failedCheck
+          ? `${failedCheck.acceptanceCriterionId} contradicted by host-verified browser state: ${failedCheck.reason}`
+          : blockedCheck
+            ? `${blockedCheck.acceptanceCriterionId} could not be verified: ${blockedCheck.reason}`
+            : decision.assessments.some((assessment) => !assessment.meets)
+              ? "Gemini proposed a failed assessment, but the host verifier found no independently confirmed contradiction."
+              : "All scenario verification checks passed against real post-action accessibility snapshots.";
+        if (status === "PASS") await screenshot();
         const result: ScenarioResult = {
           scenarioId: scenario.id,
           title: scenario.title,
           acceptanceCriteriaIds: scenario.acceptanceCriteriaIds,
           status,
+          ...(failedCheck ? { hostVerifiedFailure: true } : {}),
           expected: scenario.expectedResult,
-          observed: decision.assessments.map((item) => `${item.acceptanceCriteriaId}: ${item.observedEvidence}`).join("\n"),
-          reason: failed ? `${failed.acceptanceCriteriaId} contradicted by observed state: ${failed.explanation}` : decision.rationale,
+          observed: checks.map((check) => `${check.acceptanceCriterionId} ${check.status}: ${check.reason}; evidence=${check.evidence.join(" | ")}`).join("\n"),
+          reason,
           evidence,
           actionCount,
           recoveryCount,
+          ...scenarioPlanFields(scenario),
         };
-        await record({ toolName: "assertion", status, assessments: decision.assessments, rationale: decision.rationale });
+        await record({ toolName: "assertion", status, requestCount: modelRequestCount, modelAssessments: decision.assessments, hostVerification: checks, rationale: decision.rationale });
         return result;
       }
 
@@ -217,11 +386,13 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
         await record({ toolName: decision.toolName, status: "stale_reference", arguments: args, result: message, rationale: decision.rationale });
         if (recoveryCount >= limits.maxRecoveryRetries) return blockedResult(scenario, issue, `${message} Recovery limit reached.`, actionCount, recoveryCount, evidence);
         recoveryCount += 1;
-        const refreshed = await browser.call("browser_snapshot", {}, Math.min(20_000, Math.max(1, deadline - Date.now())));
+        const refreshed = await captureSnapshot(browser, issue, deadline);
         if (refreshed.isError || !refreshed.text.trim()) return blockedResult(scenario, issue, `Recovery snapshot failed: ${refreshed.text}`, actionCount, recoveryCount, evidence);
         latestSnapshot = refreshed.text;
         verifySnapshotOrigin(latestSnapshot, issue.targetUrl);
         history.push({ toolName: "browser_snapshot", result: latestSnapshot.slice(0, 4000) });
+        observations.push({ text: latestSnapshot, stage: "post_action" });
+        await record({ toolName: "browser_snapshot", result: latestSnapshot.slice(0, 1500), rationale: "Refresh browser state after rejecting a stale reference." });
         await screenshot();
         continue;
       }
@@ -232,7 +403,24 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
       previousActionKey = actionKey;
 
       actionCount += 1;
-      const toolResult = await browser.call(decision.toolName, args, Math.min(20_000, Math.max(1000, deadline - Date.now())));
+      const preActionSnapshot = latestSnapshot;
+      await record({
+        toolName: decision.toolName,
+        event: "pre_action_observation",
+        observation: preActionSnapshot.slice(0, 1500),
+        arguments: args,
+        rationale: decision.rationale,
+      });
+      const toolResult = await browser.call(decision.toolName, args, Math.min(20_000, Math.max(1, deadline - Date.now())));
+      const actionEvidence: ScenarioBrowserAction = {
+        toolName: decision.toolName,
+        arguments: args,
+        rationale: decision.rationale,
+        status: toolResult.isError ? "error" : "ok",
+        result: textFromTool(toolResult).slice(0, 2000),
+        preActionObservation: preActionSnapshot.slice(0, 4000),
+      };
+      trace.browserActions.push(actionEvidence);
       await record({
         toolName: decision.toolName,
         arguments: args,
@@ -243,31 +431,54 @@ export async function executeScenario(input: ExecuteInput): Promise<ScenarioResu
       if (toolResult.isError) {
         if (recoveryCount >= limits.maxRecoveryRetries) return blockedResult(scenario, issue, `Browser interaction failed after ${recoveryCount} recovery retries: ${toolResult.text}`, actionCount, recoveryCount, evidence);
         recoveryCount += 1;
-        const refreshed = await browser.call("browser_snapshot");
+        const refreshed = await captureSnapshot(browser, issue, deadline);
         if (refreshed.isError || !refreshed.text.trim()) return blockedResult(scenario, issue, `Recovery snapshot failed: ${refreshed.text}`, actionCount, recoveryCount, evidence);
         latestSnapshot = refreshed.text;
         verifySnapshotOrigin(latestSnapshot, issue.targetUrl);
         history.push({ toolName: "browser_snapshot", result: latestSnapshot.slice(0, 4000) });
+        observations.push({ text: latestSnapshot, stage: "post_action" });
+        await record({ toolName: "browser_snapshot", result: latestSnapshot.slice(0, 1500), rationale: "Observe browser state after a failed interaction." });
         await screenshot();
         continue;
       }
       history.push({ toolName: decision.toolName, result: textFromTool(toolResult).slice(0, 4000) });
-      const observation = await browser.call("browser_snapshot");
+      const observation = await captureSnapshot(browser, issue, deadline);
       if (observation.isError || !observation.text.trim()) return blockedResult(scenario, issue, `Post-action observation failed: ${observation.text}`, actionCount, recoveryCount, evidence);
       latestSnapshot = observation.text;
       verifySnapshotOrigin(latestSnapshot, issue.targetUrl);
       history.push({ toolName: "browser_snapshot", result: latestSnapshot.slice(0, 4000) });
-      await record({ toolName: "browser_snapshot", result: latestSnapshot.slice(0, 1500), rationale: `Observe result after ${decision.toolName}.` });
+      observations.push({ text: latestSnapshot, stage: "post_action" });
+      actionEvidence.postActionObservation = latestSnapshot.slice(0, 4000);
+      await record({
+        toolName: "browser_snapshot",
+        event: "post_action_observation",
+        preActionSnapshot: preActionSnapshot.slice(0, 1000),
+        result: latestSnapshot.slice(0, 1500),
+        rationale: `Observe result after ${decision.toolName}.`,
+      });
       await screenshot();
       if (Date.now() >= deadline) return blockedResult(scenario, issue, "Scenario time limit reached before all criteria were verified.", actionCount, recoveryCount, evidence);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       const serviceFailure = isGeminiServiceError(error);
-      await record({ toolName: "executor", status: serviceFailure ? "service_error" : "error", result: reason });
+      await record({ toolName: "executor", status: serviceFailure ? "service_error" : "error", requestCount: modelRequestCount, result: reason });
       return blockedResult(scenario, issue, reason, actionCount, recoveryCount, evidence);
     }
   }
   const reason = Date.now() >= deadline ? "Scenario time limit reached." : "Maximum browser action budget exhausted.";
   await record({ toolName: "executor", status: "blocked", result: reason });
   return blockedResult(scenario, issue, reason, actionCount, recoveryCount, evidence);
+}
+
+export async function executeScenario(input: ExecuteInput): Promise<ScenarioResult> {
+  const startedAt = Date.now();
+  const trace: ExecutorTrace = { modelRequestCount: 0, browserActions: [], hostVerification: [] };
+  const result = await executeScenarioInternal(input, trace);
+  return {
+    ...result,
+    browserActions: trace.browserActions,
+    hostVerification: trace.hostVerification,
+    modelRequestCount: trace.modelRequestCount,
+    executionDurationMs: Date.now() - startedAt,
+  };
 }

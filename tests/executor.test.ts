@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/evidence/logger.js", () => ({ appendActionLog: vi.fn(async () => undefined) }));
 
-import { executeScenario, type BrowserAgent, type JsonAgent } from "../src/agents/executor.js";
+import { executeScenario, verifyScenarioChecks, type BrowserAgent, type JsonAgent } from "../src/agents/executor.js";
 import type { NormalizedIssue, PlannedScenario } from "../src/schemas.js";
 import type { DiscoveredTool } from "../src/browser/tool-policy.js";
 
@@ -23,26 +23,40 @@ const scenario: PlannedScenario = {
   acceptanceCriteriaIds: ["AC-01"],
   preconditions: [],
   steps: [{ intent: "Create a new task", expectedObservation: "The task appears" }],
+  verificationStrategy: "Confirm the created task appears in a fresh accessibility snapshot.",
+  verificationChecks: [{
+    acceptanceCriterionId: "AC-01",
+    kind: "visible",
+    expectedVisible: ["{{uniqueTaskText}}"],
+    expectedAbsent: [],
+  }],
+  relevantApplicationContext: ["textbox: What needs to be done?"],
+  unknownControlsToDiscover: [],
   expectedResult: "The unique task is visible.",
 };
 const tools: DiscoveredTool[] = [
   { name: "browser_navigate", inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } },
   { name: "browser_snapshot", inputSchema: { type: "object" } },
   { name: "browser_click", inputSchema: { type: "object", properties: { target: { type: "string" } }, required: ["target"] } },
+  { name: "browser_hover", inputSchema: { type: "object", properties: { target: { type: "string" } }, required: ["target"] } },
   { name: "browser_type", inputSchema: { type: "object", properties: { target: { type: "string" }, text: { type: "string" } }, required: ["target", "text"], additionalProperties: false } },
   { name: "browser_take_screenshot", inputSchema: { type: "object" } },
 ];
 
 class FakeAgent implements JsonAgent {
   calls = 0;
+  readonly prompts: string[] = [];
+  readonly responses: unknown[] = [];
   readonly schemas: Array<Record<string, unknown>> = [];
   constructor(private readonly decisions: unknown[]) {}
-  async generateJson(_prompt: string, schema: Record<string, unknown>): Promise<unknown> {
+  async generateJson(prompt: string, schema: Record<string, unknown>): Promise<unknown> {
     this.calls += 1;
+    this.prompts.push(prompt);
     this.schemas.push(schema);
     const decision = this.decisions.shift();
     if (decision === undefined) throw new Error("Fake agent ran out of decisions.");
     if (decision instanceof Error) throw decision;
+    this.responses.push(decision);
     return decision;
   }
 }
@@ -72,11 +86,31 @@ afterEach(async () => {
   screenshotDirectory = "";
 });
 
+it("classifies Gemini 503 as BLOCKED without additional model requests", async () => {
+  const agent = new FakeAgent([Object.assign(new Error("Gemini HTTP 503 UNAVAILABLE"), { status: 503 })]);
+  screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
+  const browser = new FakeBrowser([pageSnapshot("Initial state")]);
+  const result = await executeScenario({
+    agent,
+    browser,
+    issue,
+    scenario,
+    runId: "TEST",
+    scenarioIndex: 1,
+    screenshotDirectory,
+    limits: { maxActions: 10, maxModelRequests: 10, maxSeconds: 10, maxRecoveryRetries: 1 },
+  });
+  expect(result.status).toBe("BLOCKED");
+  expect(result.reason).toContain("503");
+  expect(agent.calls).toBe(1);
+});
+
 async function run(decisions: unknown[], snapshots: string[], options: {
   results?: Array<{ text: string; isError: boolean }>;
   maxActions?: number;
   maxSeconds?: number;
   maxRecoveryRetries?: number;
+  maxModelRequests?: number;
 } = {}) {
   screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
   return executeScenario({
@@ -89,6 +123,7 @@ async function run(decisions: unknown[], snapshots: string[], options: {
     screenshotDirectory,
     limits: {
       maxActions: options.maxActions ?? 10,
+      maxModelRequests: options.maxModelRequests ?? 20,
       maxSeconds: options.maxSeconds ?? 10,
       maxRecoveryRetries: options.maxRecoveryRetries ?? 1,
     },
@@ -101,6 +136,12 @@ const passDecision = (evidence: string) => ({
   rationale: "Observed the item after navigation.",
 });
 const clickDecision = { kind: "action", toolName: "browser_click", arguments: { target: "e1" }, rationale: "Use the observed control." };
+const createTaskDecision = {
+  kind: "action",
+  toolName: "browser_type",
+  arguments: { target: "e1", text: "QA-TEST-SC-01" },
+  rationale: "Create the planned unique task.",
+};
 const pageSnapshot = (content: string, url = "https://demo.test/", reference = "e1") => `- Page URL: ${url}\n- textbox [ref=${reference}]\n${content}`;
 
 function schemaActionBranch(schema: Record<string, unknown>, toolName: string): Record<string, unknown> {
@@ -115,25 +156,26 @@ function schemaActionBranch(schema: Record<string, unknown>, toolName: string): 
 }
 
 describe("autonomous executor evidence gates", () => {
-  it("passes only when a post-navigation browser observation supports the AC", async () => {
-    const result = await run([passDecision("QA-TEST-SC-01")], [pageSnapshot("Todo list: QA-TEST-SC-01")]);
+  it("passes only when a post-action browser observation independently verifies task creation", async () => {
+    const result = await run([createTaskDecision, passDecision("QA-TEST-SC-01")], [pageSnapshot("Initial"), pageSnapshot("- listitem: QA-TEST-SC-01")]);
     expect(result.status).toBe("PASS");
-    expect(result.evidence).toHaveLength(2);
+    expect(result.evidence).toHaveLength(3);
+    expect(result.observed).toContain("AC-01 PASS");
   });
 
-  it("classifies an observed contradiction as FAIL", async () => {
-    const result = await run([{
+  it("does not classify unattempted model-negative assertions as product failures", async () => {
+    const result = await run([clickDecision, {
       kind: "finish",
       assessments: [{ acceptanceCriteriaId: "AC-01", meets: false, observedEvidence: "Todo list is empty", explanation: "The new item is absent." }],
       rationale: "The state contradicts the criterion.",
-    }], [pageSnapshot("Todo list is empty")]);
-    expect(result.status).toBe("FAIL");
+    }], [pageSnapshot("Initial"), pageSnapshot("Todo list is empty")]);
+    expect(result.status).toBe("BLOCKED");
   });
 
   it("rejects fabricated PASS evidence", async () => {
-    const result = await run([passDecision("I saw a task that was not in the snapshot.")], [pageSnapshot("Todo list")]);
+    const result = await run([createTaskDecision, passDecision("I saw a task that was not in the snapshot.")], [pageSnapshot("Initial"), pageSnapshot("Todo list")]);
     expect(result.status).toBe("BLOCKED");
-    expect(result.reason).toMatch(/does not exactly match/);
+    expect(result.reason).toMatch(/does not exactly match any post-action/);
   });
 
   it("stops at the action budget", async () => {
@@ -154,7 +196,7 @@ describe("autonomous executor evidence gates", () => {
       [pageSnapshot("initial state"), pageSnapshot("fresh state after recovery")],
       { results: [{ text: "Stale reference", isError: true }] },
     );
-    expect(result.status).toBe("PASS");
+    expect(result.status).toBe("BLOCKED");
     expect(result.recoveryCount).toBe(1);
   });
 
@@ -197,11 +239,11 @@ describe("autonomous executor evidence gates", () => {
   it("executes a corrected action after one schema-constrained argument retry", async () => {
     const agent = new FakeAgent([
       { kind: "action", toolName: "browser_type", arguments: {}, rationale: "Missing required fields." },
-      { kind: "action", toolName: "browser_type", arguments: { target: "e1", text: "My new task" }, rationale: "Use the observed textbox." },
-      passDecision("Observed after action"),
+      { kind: "action", toolName: "browser_type", arguments: { target: "e1", text: "QA-TEST-SC-01" }, rationale: "Use the observed textbox." },
+      passDecision("QA-TEST-SC-01"),
     ]);
     screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
-    const browser = new FakeBrowser([pageSnapshot("Initial state"), pageSnapshot("Observed after action")]);
+    const browser = new FakeBrowser([pageSnapshot("Initial state"), pageSnapshot("- listitem: QA-TEST-SC-01")]);
     const result = await executeScenario({
       agent,
       browser,
@@ -236,11 +278,11 @@ describe("autonomous executor evidence gates", () => {
   it("retries incomplete model-generated tool arguments without invoking MCP", async () => {
     const agent = new FakeAgent([
       { kind: "action", toolName: "browser_type", arguments: { target: "e1" }, rationale: "Text omitted." },
-      { kind: "action", toolName: "browser_type", arguments: { target: "e1", text: "My new task" }, rationale: "Supply required arguments." },
-      passDecision("Observed after action"),
+      { kind: "action", toolName: "browser_type", arguments: { target: "e1", text: "QA-TEST-SC-01" }, rationale: "Supply required arguments." },
+      passDecision("QA-TEST-SC-01"),
     ]);
     screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
-    const browser = new FakeBrowser([pageSnapshot("Initial state"), pageSnapshot("Observed after action")]);
+    const browser = new FakeBrowser([pageSnapshot("Initial state"), pageSnapshot("- listitem: QA-TEST-SC-01")]);
     const result = await executeScenario({
       agent,
       browser,
@@ -316,5 +358,133 @@ describe("autonomous executor evidence gates", () => {
     expect(result.status).toBe("BLOCKED");
     expect(result.recoveryCount).toBe(0);
     expect(result.reason).toMatch(/not present in the latest accessibility snapshot/);
+  });
+
+  it("discovers a previously unknown completion control only from the fresh post-create snapshot", async () => {
+    const completionScenario: PlannedScenario = {
+      ...scenario,
+      id: "SC-02",
+      title: "Complete task",
+      acceptanceCriteriaIds: ["AC-02"],
+      steps: [{ intent: "Create a task, then discover and mark it complete.", expectedObservation: "The task is observed with checked completion state." }],
+      verificationChecks: [{
+        acceptanceCriterionId: "AC-02",
+        kind: "checked",
+        expectedVisible: ["{{uniqueTaskText}}"],
+        expectedAbsent: [],
+      }],
+      unknownControlsToDiscover: ["After creation, inspect a fresh snapshot for the completion checkbox."],
+    };
+    const agent = new FakeAgent([
+      { ...createTaskDecision, arguments: { target: "e1", text: "QA-TEST-SC-02" } },
+      { kind: "action", toolName: "browser_click", arguments: { target: "e2" }, rationale: "Use the newly observed completion control." },
+      { kind: "finish", assessments: [{ acceptanceCriteriaId: "AC-02", meets: true, observedEvidence: "QA-TEST-SC-02", explanation: "Checked state appears." }], rationale: "Verified checked state." },
+    ]);
+    screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
+    const browser = new FakeBrowser([
+      pageSnapshot("textbox [ref=e1]"),
+      pageSnapshot('- listitem:\n  checkbox "Complete" [ref=e2] [unchecked]\n  text: QA-TEST-SC-02'),
+      pageSnapshot('- listitem:\n  checkbox "Complete" [ref=e2] [checked]\n  text: QA-TEST-SC-02'),
+    ]);
+    const result = await executeScenario({
+      agent,
+      browser,
+      issue: { ...issue, acceptanceCriteria: [...issue.acceptanceCriteria, { id: "AC-02", description: "Mark task complete." }] },
+      scenario: completionScenario,
+      runId: "TEST",
+      scenarioIndex: 1,
+      screenshotDirectory,
+      limits: { maxActions: 10, maxModelRequests: 10, maxSeconds: 10, maxRecoveryRetries: 1 },
+    });
+    expect(agent.responses).toHaveLength(3);
+    expect(agent.responses[2]).toMatchObject({ kind: "finish", assessments: [{ acceptanceCriteriaId: "AC-02" }] });
+    expect(result.status, result.reason).toBe("PASS");
+    expect(browser.calls).toContain("browser_click");
+    expect(agent.prompts[1]).toContain('checkbox "Complete" [ref=e2]');
+    expect(agent.prompts[1]).toContain("After creation, inspect a fresh snapshot");
+  });
+
+  it("host-verifies checked, unchecked, filtered inclusion/exclusion, and deletion absence", () => {
+    const unique = "QA-TEST-SC-01";
+    const completedScenario: PlannedScenario = {
+      ...scenario,
+      acceptanceCriteriaIds: ["AC-01"],
+      verificationChecks: [{ acceptanceCriterionId: "AC-01", kind: "checked", expectedVisible: ["{{uniqueTaskText}}"], expectedAbsent: [] }],
+    };
+    const checked = verifyScenarioChecks(completedScenario, issue, unique, [
+      { stage: "initial", text: pageSnapshot("Initial") },
+      { stage: "post_action", text: pageSnapshot(`- listitem:\n checkbox "Complete" [checked]\n text: ${unique}`) },
+    ]);
+    const unchecked = verifyScenarioChecks(completedScenario, issue, unique, [
+      { stage: "initial", text: pageSnapshot("Initial") },
+      { stage: "post_action", text: pageSnapshot(`- listitem:\n checkbox "Complete" [unchecked]\n text: ${unique}`) },
+    ]);
+    expect(checked[0]?.status).toBe("PASS");
+    expect(unchecked[0]?.status).toBe("FAIL");
+
+    const filterIssue = {
+      ...issue,
+      acceptanceCriteria: [{ id: "AC-03", description: "Active filter excludes completed tasks." }],
+    };
+    const filterScenario: PlannedScenario = {
+      ...scenario,
+      acceptanceCriteriaIds: ["AC-03"],
+      verificationChecks: [{
+        acceptanceCriterionId: "AC-03",
+        kind: "filter",
+        expectedVisible: ["{{uniqueTaskText}}-ACTIVE"],
+        expectedAbsent: ["{{uniqueTaskText}}-COMPLETED"],
+      }],
+    };
+    const beforeFilter = pageSnapshot(`- listitem: ${unique}-ACTIVE\n- listitem: ${unique}-COMPLETED`);
+    const filtered = pageSnapshot(`link "Active" [current]\n- listitem: ${unique}-ACTIVE`);
+    const filterPass = verifyScenarioChecks(filterScenario, filterIssue, unique, [
+      { stage: "initial", text: beforeFilter },
+      { stage: "post_action", text: filtered },
+    ]);
+    const filterFail = verifyScenarioChecks(filterScenario, filterIssue, unique, [
+      { stage: "initial", text: beforeFilter },
+      { stage: "post_action", text: pageSnapshot(`link "Active" [current]\n- listitem: ${unique}-ACTIVE\n- listitem: ${unique}-COMPLETED`) },
+    ]);
+    expect(filterPass[0]?.status).toBe("PASS");
+    expect(filterFail[0]?.status).toBe("FAIL");
+
+    const deletionScenario: PlannedScenario = {
+      ...scenario,
+      acceptanceCriteriaIds: ["AC-01"],
+      verificationChecks: [{
+        acceptanceCriterionId: "AC-01",
+        kind: "absent_after_seen",
+        expectedVisible: ["{{uniqueTaskText}}"],
+        expectedAbsent: ["{{uniqueTaskText}}"],
+      }],
+    };
+    expect(verifyScenarioChecks(deletionScenario, issue, unique, [
+      { stage: "initial", text: pageSnapshot(`- listitem: ${unique}`) },
+      { stage: "post_action", text: pageSnapshot(`textbox "New todo" [placeholder=${unique}]\nTodo list empty`) },
+    ])[0]?.status).toBe("PASS");
+    expect(verifyScenarioChecks(deletionScenario, issue, unique, [
+      { stage: "initial", text: pageSnapshot(`- listitem: ${unique}`) },
+      { stage: "post_action", text: pageSnapshot(`- listitem: ${unique}`) },
+    ])[0]?.status).toBe("FAIL");
+  });
+
+  it("stops before exceeding the configured Gemini executor request budget", async () => {
+    const agent = new FakeAgent([clickDecision, clickDecision]);
+    screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
+    const browser = new FakeBrowser([pageSnapshot("Initial"), pageSnapshot("After click")]);
+    const result = await executeScenario({
+      agent,
+      browser,
+      issue,
+      scenario,
+      runId: "TEST",
+      scenarioIndex: 1,
+      screenshotDirectory,
+      limits: { maxActions: 10, maxModelRequests: 1, maxSeconds: 10, maxRecoveryRetries: 1 },
+    });
+    expect(result.status).toBe("BLOCKED");
+    expect(result.reason).toMatch(/Gemini executor request budget/);
+    expect(agent.calls).toBe(1);
   });
 });
