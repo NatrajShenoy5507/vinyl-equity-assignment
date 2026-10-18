@@ -1,0 +1,30 @@
+{
+  "name": "vinyl-challenge",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "qa:mock": "tsx src/index.ts --source=mock",
+    "qa:github": "tsx src/index.ts --source=github",
+    "qa:browser-smoke": "tsx src/browser/smoke.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "dotenv": "^18.0.8",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

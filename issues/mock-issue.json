@@ -1,0 +1,13 @@
+{
+  "issueNumber": 1,
+  "title": "Todo Management - Create, Complete, Filter and Delete",
+  "status": "RFQA",
+  "targetUrl": "https://demo.playwright.dev/todomvc/",
+  "description": "As a user, I want to manage my tasks so I can track what remains to be done.",
+  "acceptanceCriteria": [
+    { "id": "AC-01", "description": "A new task with valid text appears in the list." },
+    { "id": "AC-02", "description": "A user can mark a created task complete and see its completed state." },
+    { "id": "AC-03", "description": "The Active filter hides completed tasks and shows active tasks." },
+    { "id": "AC-04", "description": "A user can remove a task and it no longer appears in the list." }
+  ]
+}
