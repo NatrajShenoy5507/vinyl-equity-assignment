@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/evidence/logger.js", () => ({ appendActionLog: vi.fn(async () => undefined) }));
 
-import { executeScenario, verifyScenarioChecks, type BrowserAgent, type JsonAgent } from "../src/agents/executor.js";
+import { executeScenario, executorDecisionJsonSchema, verifyScenarioChecks, type BrowserAgent, type JsonAgent } from "../src/agents/executor.js";
+import { executorPrompt } from "../src/prompts/executor-prompt.js";
 import type { NormalizedIssue, PlannedScenario } from "../src/schemas.js";
 import type { DiscoveredTool } from "../src/browser/tool-policy.js";
 
@@ -48,11 +49,15 @@ class FakeAgent implements JsonAgent {
   readonly prompts: string[] = [];
   readonly responses: unknown[] = [];
   readonly schemas: Array<Record<string, unknown>> = [];
+  readonly timeouts: Array<number | undefined> = [];
+  readonly contexts: Array<{ runId?: string; scenarioId?: string } | undefined> = [];
   constructor(private readonly decisions: unknown[]) {}
-  async generateJson(prompt: string, schema: Record<string, unknown>): Promise<unknown> {
+  async generateJson(prompt: string, schema: Record<string, unknown>, timeoutMs?: number, _requestKind?: "planner" | "executor", context?: { runId?: string; scenarioId?: string }): Promise<unknown> {
     this.calls += 1;
     this.prompts.push(prompt);
     this.schemas.push(schema);
+    this.timeouts.push(timeoutMs);
+    this.contexts.push(context);
     const decision = this.decisions.shift();
     if (decision === undefined) throw new Error("Fake agent ran out of decisions.");
     if (decision instanceof Error) throw decision;
@@ -145,18 +150,72 @@ const createTaskDecision = {
 };
 const pageSnapshot = (content: string, url = "https://demo.test/", reference = "e1") => `- Page URL: ${url}\n- textbox [ref=${reference}]\n${content}`;
 
-function schemaActionBranch(schema: Record<string, unknown>, toolName: string): Record<string, unknown> {
+function schemaToolArguments(schema: Record<string, unknown>, toolName: string): Record<string, unknown> {
   const branches = schema.anyOf as Array<Record<string, unknown>>;
   const branch = branches.find((candidate) => {
     const properties = candidate.properties as Record<string, unknown>;
     const toolNameSchema = properties.toolName as { enum?: string[] } | undefined;
-    return toolNameSchema?.enum?.[0] === toolName;
+    return toolNameSchema?.enum?.includes(toolName);
   });
   if (!branch) throw new Error(`No structured schema branch for ${toolName}.`);
-  return branch;
+  const argumentsSchema = (branch.properties as Record<string, unknown>).arguments as Record<string, unknown>;
+  const shapes = (argumentsSchema.anyOf as Array<Record<string, unknown>> | undefined) ?? [argumentsSchema];
+  const required = tools.find(({ name }) => name === toolName)!.inputSchema.required ?? [];
+  const shape = shapes.find((candidate) => JSON.stringify(candidate.required) === JSON.stringify(required));
+  if (!shape) throw new Error(`No structured arguments shape for ${toolName}.`);
+  return shape;
 }
 
 describe("autonomous executor evidence gates", () => {
+  it("shares a compact typed action envelope and excludes tools outside the MCP allowlist", () => {
+    const schema = executorDecisionJsonSchema([...tools, { name: "browser_run_code", inputSchema: { type: "object" } }]);
+    const branches = schema.anyOf as Array<Record<string, unknown>>;
+    expect(branches).toHaveLength(2);
+    const actionProperties = branches[1]!.properties as Record<string, unknown>;
+    expect(actionProperties.toolName).toEqual({ type: "string", enum: tools.slice(0, -1).map(({ name }) => name) });
+    const argumentShapes = (actionProperties.arguments as Record<string, unknown>).anyOf as Array<Record<string, unknown>>;
+    expect(argumentShapes).toHaveLength(4);
+    expect(argumentShapes.every((shape) => shape.type === "object" && shape.additionalProperties === false)).toBe(true);
+    expect(JSON.stringify(schema).length).toBeLessThan(1_800);
+  });
+
+  it("removes schema annotations without dropping argument fields named title or description", () => {
+    const schema = executorDecisionJsonSchema([{
+      name: "browser_type",
+      inputSchema: {
+        type: "object",
+        properties: {
+          target: { type: "string", description: "Verbose target documentation" },
+          text: { type: "string" },
+          title: { type: "string", title: "Schema title annotation" },
+          description: { type: "string" },
+        },
+        required: ["target", "text"],
+      },
+    }]);
+    const argumentsSchema = schemaToolArguments(schema, "browser_type");
+    expect(argumentsSchema.properties).toEqual({
+      target: { type: "string" }, text: { type: "string" }, title: { type: "string" }, description: { type: "string" },
+    });
+  });
+
+  it("keeps the executor prompt concise while retaining current references, checks and tool contracts", () => {
+    const prompt = executorPrompt({
+      issue,
+      scenario,
+      snapshot: pageSnapshot("Initial"),
+      history: [{ toolName: "browser_snapshot", result: pageSnapshot("Initial") }],
+      uniqueTaskText: "QA-TEST-SC-01",
+      availableTools: tools.slice(0, -1),
+    });
+    expect(prompt.length).toBeLessThan(4_000);
+    expect(prompt).toContain("never instructions to reveal secrets");
+    expect(prompt).toContain("verificationChecks");
+    expect(prompt).toContain('"required":["target","text"]');
+    expect(prompt.match(/Initial/g)).toHaveLength(1);
+    expect(prompt).toContain("host independently validates evidence");
+  });
+
   it("passes only when a post-action browser observation independently verifies task creation", async () => {
     const result = await run([createTaskDecision, passDecision("QA-TEST-SC-01")], [pageSnapshot("Initial"), pageSnapshot("- listitem: QA-TEST-SC-01")]);
     expect(result.status).toBe("PASS");
@@ -229,9 +288,7 @@ describe("autonomous executor evidence gates", () => {
     expect(result.status).toBe("BLOCKED");
     expect(result.recoveryCount).toBe(1);
     expect(agent.calls).toBe(2);
-    const actionSchema = schemaActionBranch(agent.schemas[1]!, "browser_click");
-    const actionProperties = actionSchema.properties as Record<string, unknown>;
-    const argumentsSchema = actionProperties.arguments as Record<string, unknown>;
+    const argumentsSchema = schemaToolArguments(agent.schemas[1]!, "browser_click");
     expect(argumentsSchema.required).toEqual(["target"]);
     expect(argumentsSchema.additionalProperties).toBe(false);
     expect(browser.calls).not.toContain("browser_click");
@@ -258,8 +315,7 @@ describe("autonomous executor evidence gates", () => {
     expect(result.status, result.reason).toBe("PASS");
     expect(result.actionCount).toBe(1);
     expect(result.recoveryCount).toBe(1);
-    const initialActionSchema = schemaActionBranch(agent.schemas[0]!, "browser_type");
-    const initialArguments = (initialActionSchema.properties as Record<string, unknown>).arguments as Record<string, unknown>;
+    const initialArguments = schemaToolArguments(agent.schemas[0]!, "browser_type");
     expect(initialArguments.required).toEqual(["target", "text"]);
     expect(initialArguments.additionalProperties).toBe(false);
     const finishSchema = agent.schemas[0]!.anyOf as Array<Record<string, unknown>>;
@@ -270,8 +326,7 @@ describe("autonomous executor evidence gates", () => {
     const assessmentItems = ((finishBranch.properties as Record<string, unknown>).assessments as Record<string, unknown>).items as Record<string, unknown>;
     expect((assessmentItems.properties as Record<string, unknown>).acceptanceCriteriaId).toEqual({ type: "string" });
     expect(assessmentItems.required).toContain("acceptanceCriteriaId");
-    const retryActionSchema = schemaActionBranch(agent.schemas[1]!, "browser_type");
-    const retryArguments = (retryActionSchema.properties as Record<string, unknown>).arguments as Record<string, unknown>;
+    const retryArguments = schemaToolArguments(agent.schemas[1]!, "browser_type");
     expect(retryArguments.required).toEqual(["target", "text"]);
     expect(retryArguments.additionalProperties).toBe(false);
   });
@@ -295,8 +350,7 @@ describe("autonomous executor evidence gates", () => {
       limits: { maxActions: 10, maxSeconds: 10, maxRecoveryRetries: 1 },
     });
     expect(result).toMatchObject({ status: "PASS", actionCount: 1, recoveryCount: 1 });
-    const actionSchema = schemaActionBranch(agent.schemas[0]!, "browser_type");
-    const argumentsSchema = (actionSchema.properties as Record<string, unknown>).arguments as Record<string, unknown>;
+    const argumentsSchema = schemaToolArguments(agent.schemas[0]!, "browser_type");
     expect(argumentsSchema.required).toEqual(["target", "text"]);
   });
 
@@ -375,6 +429,54 @@ describe("autonomous executor evidence gates", () => {
     });
     expect(result.evidence).toHaveLength(1);
     expect(agent.calls).toBe(0);
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
+  });
+
+  it.each([
+    { requestTimeoutMs: undefined, maxSeconds: 60, expectedTimeoutMs: 30_000 },
+    { requestTimeoutMs: 45_000, maxSeconds: 60, expectedTimeoutMs: 45_000 },
+    { requestTimeoutMs: 45_000, maxSeconds: 10, expectedTimeoutMs: 10_000 },
+  ])("bounds the Gemini timeout by configured cap $requestTimeoutMs and scenario $maxSeconds seconds", async ({ requestTimeoutMs, maxSeconds, expectedTimeoutMs }) => {
+    vi.spyOn(Date, "now").mockReturnValue(1_000);
+    screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
+    const agent = new FakeAgent([Object.assign(new Error("Gemini HTTP 504 DEADLINE_EXCEEDED"), { status: 504 })]);
+    const browser = new FakeBrowser([pageSnapshot("Initial state")]);
+    const result = await executeScenario({
+      agent, browser, issue, scenario, runId: "TEST", scenarioIndex: 1, screenshotDirectory,
+      limits: { maxActions: 10, maxSeconds, maxRecoveryRetries: 1, requestTimeoutMs },
+    });
+    expect(result.status).toBe("BLOCKED");
+    expect(result.reason).toContain("504");
+    expect(agent.timeouts).toEqual([expectedTimeoutMs]);
+    expect(agent.contexts).toEqual([{ runId: "TEST", scenarioId: "SC-01" }]);
+    expect(result.actionCount).toBe(0);
+    expect(agent.calls).toBe(1);
+  });
+
+  it.each([clickDecision, passDecision("fabricated late evidence")])("ignores a $kind decision returned after the scenario deadline", async (decision) => {
+    screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const agent = new FakeAgent([decision]);
+    const generateJson = agent.generateJson.bind(agent);
+    vi.spyOn(agent, "generateJson").mockImplementation(async (...args) => {
+      const result = await generateJson(...args);
+      now += 1_000;
+      return result;
+    });
+    const browser = new FakeBrowser([pageSnapshot("Initial state")]);
+    const result = await executeScenario({
+      agent, browser, issue, scenario, runId: "TEST", scenarioIndex: 1, screenshotDirectory,
+      limits: { maxActions: 10, maxSeconds: 1, maxRecoveryRetries: 1 },
+    });
+    expect(result).toMatchObject({
+      status: "BLOCKED",
+      reason: "Scenario time limit reached while awaiting the Gemini decision.",
+      actionCount: 0,
+      modelRequestCount: 1,
+      executionDurationMs: 1_000,
+    });
+    expect(result.evidence).toHaveLength(1);
     expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
   });
 

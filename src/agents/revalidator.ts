@@ -30,6 +30,7 @@ export interface RevalidatorInput {
     maxModelRequests?: number;
     maxSeconds: number;
     maxRecoveryRetries: number;
+    requestTimeoutMs?: number;
   };
 }
 

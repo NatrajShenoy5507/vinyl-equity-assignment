@@ -20,7 +20,7 @@ const plannerJsonSchema: Record<string, unknown> = {
         properties: {
           id: { type: "string" },
           title: { type: "string" },
-          acceptanceCriteriaIds: { type: "array", items: { type: "string" } },
+          acceptanceCriteriaIds: { type: "array", minItems: 1, maxItems: 1, items: { type: "string" } },
           preconditions: { type: "array", items: { type: "string" } },
           steps: {
             type: "array",
@@ -73,6 +73,7 @@ const plannerJsonSchema: Record<string, unknown> = {
 const cacheSchema = z.object({
   issueFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   applicationContextFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  planningContractFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   modelName: z.string().min(1),
   generatedAt: z.string().datetime(),
   plan: z.unknown(),
@@ -82,6 +83,7 @@ const generationArtifactSchema = z.object({
   runId: z.string().min(1),
   issueNumber: z.number().int().positive(),
   modelName: z.string().min(1),
+  planningContractFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   applicationContextReference: z.object({
     path: z.string().min(1),
     runId: z.string().min(1),
@@ -156,6 +158,19 @@ function fingerprint(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
+// Bump for host planning-rule changes; prompt and either response schema changes
+// are detected automatically, including changes that leave old plans parseable.
+const planningContractVersion = 2;
+
+function planningContractFingerprint(issue: NormalizedIssue, applicationContext: ApplicationContext): string {
+  return fingerprint({
+    version: planningContractVersion,
+    prompt: plannerPrompt(issue, applicationContext),
+    responseSchema: plannerJsonSchema,
+    hostSchema: z.toJSONSchema(scenarioPlanSchema),
+  });
+}
+
 function hasUnsupportedReferenceOrSelector(plan: ScenarioPlan): boolean {
   const forbiddenPatterns = [
     /\[ref=e\d+\]/i,
@@ -207,6 +222,9 @@ export function validateScenarioPlan(
     for (const id of scenario.acceptanceCriteriaIds) {
       if (!known.has(id)) throw new Error(`Gemini scenario plan references unknown acceptance criterion ${id}.`);
       covered.add(id);
+    }
+    if (scenario.acceptanceCriteriaIds.length !== 1) {
+      throw new Error(`Scenario ${scenario.id} must verify exactly one acceptance criterion independently; establish its prerequisite state within its own steps.`);
     }
   }
   const missing = [...known].filter((id) => !covered.has(id));
@@ -332,6 +350,7 @@ export async function generateScenarioPlan(
   const applicationContext = validateApplicationContext(applicationContextInputValue, issue);
   const issueFingerprint = fingerprint(issue);
   const applicationFingerprint = fingerprint(applicationContextInput(applicationContext));
+  const contractFingerprint = planningContractFingerprint(issue, applicationContext);
   const cachePath = resolve(options.cachePath ?? resolve(evidenceDirectory, "scenario-plan-cache.json"));
   const artifactPath = resolve(options.artifactPath ?? resolve(evidenceDirectory, "generated-scenarios.json"));
   const logAction = options.logAction ?? appendActionLog;
@@ -345,6 +364,7 @@ export async function generateScenarioPlan(
     if (cached.cache.issueFingerprint !== issueFingerprint) invalidationReason = "Normalized issue or acceptance criteria changed.";
     else if (cached.cache.applicationContextFingerprint !== applicationFingerprint) invalidationReason = "Observed application context changed.";
     else if (cached.cache.modelName !== agent.model) invalidationReason = "Gemini model changed.";
+    else if (cached.cache.planningContractFingerprint !== contractFingerprint) invalidationReason = "Planning contract, prompt, or response schema changed.";
     else {
       try {
         plan = validateScenarioPlan(cached.cache.plan, issue, applicationContext);
@@ -362,6 +382,7 @@ export async function generateScenarioPlan(
     await writeFile(cachePath, `${JSON.stringify({
       issueFingerprint,
       applicationContextFingerprint: applicationFingerprint,
+      planningContractFingerprint: contractFingerprint,
       modelName: agent.model,
       generatedAt,
       plan,
@@ -373,6 +394,7 @@ export async function generateScenarioPlan(
     runId,
     issueNumber: issue.issueNumber,
     modelName: agent.model,
+    planningContractFingerprint: contractFingerprint,
     applicationContextReference: {
       path: options.applicationContextPath ?? "evidence/application-context.json",
       runId: applicationContext.runId,
@@ -395,6 +417,7 @@ export async function generateScenarioPlan(
     event: "scenario_plan_ready",
     source,
     cacheStatus: artifact.cache.status,
+    planningContractFingerprint: contractFingerprint,
     ...(artifact.cache.invalidationReason ? { cacheInvalidationReason: artifact.cache.invalidationReason } : {}),
     applicationContextRunId: applicationContext.runId,
     scenarioCount: plan.scenarios.length,

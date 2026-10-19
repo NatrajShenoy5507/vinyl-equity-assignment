@@ -15,6 +15,7 @@
     "qa:github": "tsx src/index.ts --source=github",
     "qa:explore": "tsx src/browser/explore-cli.ts",
     "qa:browser-smoke": "tsx src/browser/smoke.ts",
+    "qa:gemini-smoke": "tsx src/agents/gemini-smoke-cli.ts",
     "qa:mcp-integration": "tsx src/browser/todo-integration.ts"
   },
   "dependencies": {

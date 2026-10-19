@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { readConfig, parseCli, usage } from "./config.js";
 import { loadMockIssue } from "./issues/mock-source.js";
 import { loadGitHubIssue } from "./issues/github-source.js";
@@ -113,7 +114,7 @@ async function finalizeAndWriteReport(input: {
   return { status: report.status, totals: report.totals };
 }
 
-async function main(): Promise<number> {
+export async function main(): Promise<number> {
   const cli = parseCli(process.argv.slice(2));
   if (cli.help) {
     process.stdout.write(`${usage}\n`);
@@ -273,7 +274,7 @@ async function main(): Promise<number> {
   try {
     await mkdir(screenshotDirectory, { recursive: true });
     ledger.start(3);
-    agent = new GeminiAgent(config.GEMINI_API_KEY, config.GEMINI_MODEL);
+    agent = new GeminiAgent(config.GEMINI_API_KEY, config.GEMINI_MODEL, { runId });
     const generatedPlan = await generateScenarioPlan(agent, issue, applicationContext, runId, {
       artifactPath: generatedScenariosPath,
       applicationContextPath: relativeEvidencePath(applicationContextPath),
@@ -315,6 +316,7 @@ async function main(): Promise<number> {
             maxModelRequests: config.MAX_EXECUTOR_REQUESTS_PER_SCENARIO,
             maxSeconds: config.MAX_SCENARIO_SECONDS,
             maxRecoveryRetries: config.MAX_RECOVERY_RETRIES,
+            requestTimeoutMs: config.GEMINI_EXECUTOR_TIMEOUT_MS,
           },
         });
         results.push(result);
@@ -365,14 +367,20 @@ async function main(): Promise<number> {
             maxModelRequests: config.MAX_EXECUTOR_REQUESTS_PER_SCENARIO,
             maxSeconds: config.MAX_SCENARIO_SECONDS,
             maxRecoveryRetries: config.MAX_RECOVERY_RETRIES,
+            requestTimeoutMs: config.GEMINI_EXECUTOR_TIMEOUT_MS,
           },
         });
         revalidationExecuted = true;
       }
     }
-    ledger.complete(4, "COMPLETED", {
+    const executionBlockers = results.filter((result) => result.status === "BLOCKED");
+    const executionErrors = [...new Set([
+      ...(blocker ? [blocker] : []),
+      ...executionBlockers.map((result) => `${result.scenarioId}: ${result.reason}`),
+    ])];
+    ledger.complete(4, executionErrors.length > 0 ? "BLOCKED" : "COMPLETED", {
       outputArtifacts: [screenshotDirectory, resolve(runDir, "action-log.ndjson")],
-      ...(blocker ? { errors: [blocker] } : {}),
+      ...(executionErrors.length > 0 ? { errors: executionErrors } : {}),
     });
     if (revalidationExecuted) {
       ledger.complete(5, "COMPLETED");
@@ -389,7 +397,7 @@ async function main(): Promise<number> {
       ledger.complete(3, status, { errors: [blocker] });
       ledger.markRemainingNotRun(4, "Scenario generation did not complete.");
     } else if (executionStarted) {
-      ledger.complete(4, "FAILED", { errors: [blocker] });
+      ledger.complete(4, isGeminiServiceError(error) ? "BLOCKED" : "FAILED", { errors: [blocker] });
       if (!revalidationExecuted) {
         ledger.markNotRun(5, "Execution failed before revalidation could run.");
       }
@@ -455,9 +463,11 @@ function relativeEvidencePath(absolutePath: string): string {
   return fromCwd.startsWith("..") ? absolutePath.replaceAll("\\", "/") : fromCwd;
 }
 
-main().then((exitCode) => {
-  process.exitCode = exitCode;
-}).catch((error: unknown) => {
-  process.stderr.write(`Fatal error: ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().then((exitCode) => {
+    process.exitCode = exitCode;
+  }).catch((error: unknown) => {
+    process.stderr.write(`Fatal error: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

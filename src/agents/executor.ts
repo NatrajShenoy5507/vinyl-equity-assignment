@@ -15,7 +15,7 @@ import { appendActionLog } from "../evidence/logger.js";
 import { isGeminiServiceError } from "./gemini-errors.js";
 
 export interface JsonAgent {
-  generateJson(prompt: string, schema: Record<string, unknown>, timeoutMs?: number, requestKind?: "planner" | "executor"): Promise<unknown>;
+  generateJson(prompt: string, schema: Record<string, unknown>, timeoutMs?: number, requestKind?: "planner" | "executor", context?: { runId?: string; scenarioId?: string }): Promise<unknown>;
 }
 
 export interface BrowserAgent {
@@ -24,14 +24,26 @@ export interface BrowserAgent {
   screenshot(filePath: string, timeoutMs?: number): Promise<void>;
 }
 
-interface ExecutorLimits {
+export interface ExecutorLimits {
   maxActions: number;
   maxModelRequests?: number;
   maxSeconds: number;
   maxRecoveryRetries: number;
+  requestTimeoutMs?: number;
 }
 
-function decisionJsonSchema(tools: DiscoveredTool[], onlyToolName?: string): Record<string, unknown> {
+// Descriptive annotations can dominate discovered MCP schemas. Keep their actual
+// constraints; exact tool-specific validation still runs locally before any call.
+function compactSchema(value: unknown, propertyMap = false): unknown {
+  if (Array.isArray(value)) return value.map((child) => compactSchema(child));
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => propertyMap || !["description", "title", "examples", "default", "$schema"].includes(key))
+    .map(([key, child]) => [key, !propertyMap && ["enum", "const"].includes(key)
+      ? child : compactSchema(child, !propertyMap && ["properties", "$defs", "definitions"].includes(key))]));
+}
+
+export function executorDecisionJsonSchema(tools: DiscoveredTool[], onlyToolName?: string): Record<string, unknown> {
   const finishDecision = {
     type: "object",
     properties: {
@@ -55,25 +67,32 @@ function decisionJsonSchema(tools: DiscoveredTool[], onlyToolName?: string): Rec
     required: ["kind", "assessments", "rationale"],
     additionalProperties: false,
   };
-  const actionDecisions = tools
-    .filter((tool) => onlyToolName === undefined || tool.name === onlyToolName)
-    .map((tool) => ({
+  const availableTools = getPermittedTools(tools).filter((tool) => onlyToolName === undefined || tool.name === onlyToolName);
+  if (availableTools.length === 0) return finishDecision;
+  const argumentSchemas = [...new Map(availableTools.map((tool) => {
+    const schema = compactSchema({
       type: "object",
-      properties: {
-        kind: { type: "string", enum: ["action"] },
-        toolName: { type: "string", enum: [tool.name] },
-        arguments: {
-          type: "object",
-          properties: tool.inputSchema.properties ?? {},
-          required: tool.inputSchema.required ?? [],
-          additionalProperties: false,
-        },
-        rationale: { type: "string" },
-      },
-      required: ["kind", "toolName", "arguments", "rationale"],
+      properties: tool.inputSchema.properties ?? {},
+      required: tool.inputSchema.required ?? [],
       additionalProperties: false,
-    }));
-  return { type: "object", anyOf: [finishDecision, ...actionDecisions] };
+    }) as Record<string, unknown>;
+    return [JSON.stringify(schema), schema] as const;
+  })).values()];
+  const actionDecision = {
+    type: "object",
+    properties: {
+      kind: { type: "string", enum: ["action"] },
+      toolName: { type: "string", enum: availableTools.map(({ name }) => name) },
+      arguments: argumentSchemas.length === 1 ? argumentSchemas[0] : { anyOf: argumentSchemas },
+      rationale: { type: "string" },
+    },
+    required: ["kind", "toolName", "arguments", "rationale"],
+    additionalProperties: false,
+  };
+  // Share the action envelope instead of repeating it for every discovered tool.
+  // The API constrains argument shapes; validateToolAction binds each shape to
+  // its exact discovered tool and rejects all unknown/missing fields locally.
+  return { type: "object", anyOf: [finishDecision, actionDecision] };
 }
 
 export interface ExecuteInput {
@@ -320,9 +339,15 @@ async function executeScenarioInternal(input: ExecuteInput, trace: ExecutorTrace
         snapshot: latestSnapshot,
         history,
         uniqueTaskText,
-        availableTools: tools.map(({ name, description }) => ({ name, ...(description ? { description } : {}) })),
+        availableTools: tools.map(({ name, inputSchema }) => ({
+          name,
+          inputSchema: compactSchema(inputSchema) as DiscoveredTool["inputSchema"],
+        })),
         invalidActionFeedback,
-      }), decisionJsonSchema(tools, rejectedToolName), Math.min(30_000, remainingMs), "executor");
+      }), executorDecisionJsonSchema(tools, rejectedToolName), Math.min(limits.requestTimeoutMs ?? 30_000, remainingMs), "executor", { runId, scenarioId: scenario.id });
+      // A service response can arrive at/after its requested timeout. Never act
+      // on it or accept a finish assessment after the scenario deadline.
+      if (Date.now() >= deadline) return blockedResult(scenario, issue, "Scenario time limit reached while awaiting the Gemini decision.", actionCount, recoveryCount, evidence);
       const decision = parseDecision(proposed);
       if (decision.kind === "finish") {
         const assessments = new Map(decision.assessments.map((assessment) => [assessment.acceptanceCriteriaId, assessment]));
@@ -402,7 +427,8 @@ async function executeScenarioInternal(input: ExecuteInput, trace: ExecutorTrace
       if (unchangedActionCount >= 1) return blockedResult(scenario, issue, "Repeated identical action against an unchanged snapshot; stopped to prevent an interaction loop.", actionCount, recoveryCount, evidence);
       previousActionKey = actionKey;
 
-      actionCount += 1;
+      if (Date.now() >= deadline) return blockedResult(scenario, issue, "Scenario time limit reached before the next browser action.", actionCount, recoveryCount, evidence);
+
       const preActionSnapshot = latestSnapshot;
       await record({
         toolName: decision.toolName,
@@ -411,6 +437,8 @@ async function executeScenarioInternal(input: ExecuteInput, trace: ExecutorTrace
         arguments: args,
         rationale: decision.rationale,
       });
+      if (Date.now() >= deadline) return blockedResult(scenario, issue, "Scenario time limit reached before the next browser action.", actionCount, recoveryCount, evidence);
+      actionCount += 1;
       const toolResult = await browser.call(decision.toolName, args, Math.min(20_000, Math.max(1, deadline - Date.now())));
       const actionEvidence: ScenarioBrowserAction = {
         toolName: decision.toolName,

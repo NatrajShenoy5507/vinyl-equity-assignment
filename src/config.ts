@@ -4,6 +4,7 @@ import { z } from "zod";
 const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  GEMINI_EXECUTOR_TIMEOUT_MS: z.coerce.number().int().min(1).max(600_000).default(30_000),
   TARGET_URL: z.string().url().default("https://demo.playwright.dev/todomvc/"),
   GITHUB_TOKEN: z.string().optional(),
   MAX_ACTIONS_PER_SCENARIO: z.coerce.number().int().min(1).max(50).default(15),
@@ -74,6 +75,7 @@ Usage:
   npm run qa:mock -- --scenario=SC-01
   npm run qa:explore
   npm run qa:browser-smoke
+  npm run qa:gemini-smoke
   npm run start -- --help
 
 Set GEMINI_API_KEY in a local .env file before a live QA run.`;
