@@ -82,6 +82,7 @@ class FakeBrowser implements BrowserAgent {
 
 let screenshotDirectory = "";
 afterEach(async () => {
+  vi.restoreAllMocks();
   if (screenshotDirectory) await rm(screenshotDirectory, { recursive: true, force: true });
   screenshotDirectory = "";
 });
@@ -342,9 +343,39 @@ describe("autonomous executor evidence gates", () => {
   });
 
   it("blocks when the per-scenario time budget is exhausted", async () => {
-    const result = await run([passDecision("state")], [pageSnapshot("state")], { maxSeconds: 0.0001 });
-    expect(result.status).toBe("BLOCKED");
-    expect(result.reason).toMatch(/time limit|action budget/);
+    screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const agent = new FakeAgent([]);
+    const browser = new FakeBrowser([pageSnapshot("state")]);
+    const takeScreenshot = browser.screenshot.bind(browser);
+    vi.spyOn(browser, "screenshot").mockImplementationOnce(async (filePath) => {
+      await takeScreenshot(filePath);
+      // Expire the deadline after initialization, independently of real elapsed time.
+      now += 1_000;
+    });
+
+    const result = await executeScenario({
+      agent,
+      browser,
+      issue,
+      scenario,
+      runId: "TEST",
+      scenarioIndex: 1,
+      screenshotDirectory,
+      limits: { maxActions: 10, maxSeconds: 1, maxRecoveryRetries: 1 },
+    });
+
+    expect(result).toMatchObject({
+      status: "BLOCKED",
+      reason: "Scenario time limit reached.",
+      actionCount: 0,
+      modelRequestCount: 0,
+      executionDurationMs: 1_000,
+    });
+    expect(result.evidence).toHaveLength(1);
+    expect(agent.calls).toBe(0);
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
   });
 
   it("blocks an off-origin redirect observed after navigation", async () => {
