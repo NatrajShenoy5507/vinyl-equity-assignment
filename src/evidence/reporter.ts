@@ -1,5 +1,5 @@
 import { access, copyFile, mkdir, writeFile } from "node:fs/promises";
-import { resolve, relative, basename } from "node:path";
+import { resolve, relative, basename, isAbsolute } from "node:path";
 import type {
   AcceptanceCriterionTrace,
   EvidenceArtifact,
@@ -113,15 +113,38 @@ export async function writeReport(report: RunReport): Promise<void> {
   await mkdir(resolve(evidenceDirectory, "screenshots", report.runId), { recursive: true });
   await mkdir(runEvidenceDirectory(report.runId), { recursive: true });
   const json = `${JSON.stringify(report, null, 2)}\n`;
-  const markdown = renderMarkdown(report);
   await dualWriteJson(report.runId, "report.json", json);
-  await dualWriteJson(report.runId, "report.md", markdown);
+  await writeFile(resolve(evidenceDirectory, "report.md"), renderMarkdown(report), "utf8");
+  await writeFile(resolve(runEvidenceDirectory(report.runId), "report.md"), renderMarkdown(report, runEvidenceDirectory(report.runId)), "utf8");
 }
 
-function evidenceLink(file: string): string {
-  const path = relative(evidenceDirectory, file).replaceAll("\\", "/");
-  if (path.startsWith("..")) return file.replaceAll("\\", "/");
-  return `./${path}`;
+function evidenceLink(file: string, reportDirectory: string): string {
+  const path = relative(reportDirectory, file).replaceAll("\\", "/");
+  return encodeURI(path.startsWith("..") ? path : `./${path}`)
+    .replaceAll("(", "%28").replaceAll(")", "%29")
+    .replaceAll("#", "%23").replaceAll("?", "%3F");
+}
+
+function isEvidencePath(value: string): boolean {
+  if (!value || /[\r\n\u0000-\u001f]/u.test(value)) return false;
+  const path = relative(evidenceDirectory, resolve(value));
+  return path !== "" && path !== ".." && !path.startsWith("..\\") && !path.startsWith("../") && !isAbsolute(path);
+}
+
+function escapeMarkdownText(value: string): string {
+  return value.replaceAll("\\", "\\\\").replace(/([`*_\[\]()<>|])/gu, "\\$1").replaceAll("\n", " ");
+}
+
+function renderEvidenceReference(value: string, reportDirectory: string): string {
+  return isEvidencePath(value)
+    ? `[${escapeMarkdownText(relativePath(value))}](${evidenceLink(value, reportDirectory)})`
+    : "Inline observation (see JSON report)";
+}
+
+function fencedText(value: string): string[] {
+  const longestFence = (value.match(/`+/gu) ?? []).reduce((longest, match) => Math.max(longest, match.length), 0);
+  const fence = "`".repeat(Math.max(3, longestFence + 1));
+  return [`${fence}text`, value, fence];
 }
 
 function formatDuration(ms: number | undefined): string {
@@ -134,7 +157,7 @@ function escapeCell(value: string): string {
   return value.replaceAll("|", "\\|").replaceAll("\n", " ");
 }
 
-export function renderMarkdown(report: RunReport): string {
+export function renderMarkdown(report: RunReport, reportDirectory = evidenceDirectory): string {
   const lines: string[] = [];
   const hasRevalidation = report.scenarios.some((scenario) => scenario.revalidation);
 
@@ -226,7 +249,7 @@ export function renderMarkdown(report: RunReport): string {
           criterion.scenarioIds.length > 0 ? criterion.scenarioIds.join(", ") : "uncovered"
         } | **${criterion.status}** | ${
           criterion.evidence.length > 0
-            ? criterion.evidence.map((file) => `[${relativePath(file)}](${evidenceLink(file)})`).join(", ")
+            ? criterion.evidence.map((file) => renderEvidenceReference(file, reportDirectory)).join(", ")
             : "unavailable"
         } |`,
       );
@@ -291,6 +314,11 @@ export function renderMarkdown(report: RunReport): string {
       lines.push("- **Host-verified assertion outcomes:**");
       for (const check of scenario.hostVerification) {
         lines.push(`  - ${check.acceptanceCriterionId}: **${check.status}** — ${check.reason}`);
+        if (check.evidence.length > 0) {
+          lines.push(`    - Evidence: ${check.evidence.map((file) => renderEvidenceReference(file, reportDirectory)).join(", ")}`);
+        } else {
+          lines.push("    - Evidence: unavailable");
+        }
       }
     } else {
       lines.push("- **Host-verified assertion outcomes:** unavailable");
@@ -298,10 +326,35 @@ export function renderMarkdown(report: RunReport): string {
     if (scenario.evidence.length > 0) {
       lines.push("- **Screenshots:**");
       for (const file of scenario.evidence) {
-        lines.push(`  - [${relativePath(file)}](${evidenceLink(file)})`);
+        lines.push(`  - ${renderEvidenceReference(file, reportDirectory)}`);
       }
     } else {
       lines.push("- **Screenshots:** unavailable");
+    }
+    if (scenario.modelAssessments && scenario.modelAssessments.length > 0) {
+      lines.push("", "**Model assessments (advisory; host checks determine scenario status):**", "");
+      for (const assessment of scenario.modelAssessments) {
+        lines.push(
+          `- **Criterion:** ${escapeMarkdownText(assessment.acceptanceCriteriaId)}`,
+          `- **Model claims criterion met:** ${assessment.meets ? "yes" : "no"}`,
+          `- **Model evidence claim:** **${assessment.evidenceStatus}**`,
+          `- **Matching host snapshot references:** ${assessment.snapshotReferences.length > 0
+            ? assessment.snapshotReferences.map((file) => renderEvidenceReference(file, reportDirectory)).join(", ")
+            : "none"}`,
+          "- **Claimed observation (model-authored):**",
+          "",
+          ...fencedText(assessment.observedEvidence),
+          "",
+          "- **Explanation (model-authored):**",
+          "",
+          ...fencedText(assessment.explanation),
+          "",
+        );
+      }
+    }
+    if (scenario.modelAssessmentWarnings && scenario.modelAssessmentWarnings.length > 0) {
+      lines.push("- **Model assessment audit warnings:**");
+      for (const warning of scenario.modelAssessmentWarnings) lines.push(`  - ${escapeMarkdownText(warning)}`);
     }
     lines.push("");
   }
@@ -326,7 +379,7 @@ export function renderMarkdown(report: RunReport): string {
       if (retry.evidence.length > 0) {
         lines.push("- **Revalidation screenshots:**");
         for (const file of retry.evidence) {
-          lines.push(`  - [${relativePath(file)}](${evidenceLink(file)})`);
+          lines.push(`  - ${renderEvidenceReference(file, reportDirectory)}`);
         }
       } else {
         lines.push("- **Revalidation screenshots:** unavailable");
@@ -347,7 +400,7 @@ export function renderMarkdown(report: RunReport): string {
       const display = relativePath(artifact.path);
       lines.push(
         `| ${escapeCell(artifact.label)} | ${
-          artifact.available ? `[${display}](${evidenceLink(artifact.path)})` : `\`${display}\``
+          artifact.available ? renderEvidenceReference(artifact.path, reportDirectory) : `\`${escapeMarkdownText(display)}\``
         } | ${artifact.available ? "yes" : "no"} |`,
       );
     }

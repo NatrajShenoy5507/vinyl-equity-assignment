@@ -100,6 +100,33 @@ function validPlan(context: ApplicationContext = makeApplicationContext()): Scen
   return { issueNumber: issue.issueNumber, scenarios: [makeScenario(context), removalScenario] };
 }
 
+const filterIssue: NormalizedIssue = {
+  ...issue,
+  acceptanceCriteria: [{ id: "AC-01", description: "The Active filter hides completed tasks and shows active tasks." }],
+};
+
+function validFilterPlan(context: ApplicationContext = makeApplicationContext()): ScenarioPlan {
+  return {
+    issueNumber: issue.issueNumber,
+    scenarios: [{
+      ...makeScenario(context),
+      title: "Filter current-scenario tasks",
+      steps: [
+        { intent: "Create a unique active task and inspect its state.", expectedObservation: "The included task is visible and unchecked." },
+        { intent: "Create a separate unique task and mark it complete using discovered controls.", expectedObservation: "The excluded task is visible and checked." },
+        { intent: "Select the Active filter using the currently observed control.", expectedObservation: "The included task remains visible and the excluded task is hidden." },
+      ],
+      verificationChecks: [{
+        acceptanceCriterionId: "AC-01",
+        kind: "filter",
+        expectedVisible: ["{{uniqueTaskText}}-ACTIVE"],
+        expectedAbsent: ["{{uniqueTaskText}}-COMPLETED"],
+      }],
+      expectedResult: "The Active filter includes the active task and hides the completed task.",
+    }],
+  };
+}
+
 class FakePlanner implements PlannerAgent {
   readonly model = "gemini-test-model";
   readonly prompts: string[] = [];
@@ -184,6 +211,43 @@ describe("context-aware scenario plan validation", () => {
     expect(independent.scenarios[0]?.verificationChecks[0]?.kind).toBe("visible");
     expect(independent.scenarios[1]?.steps[0]?.intent).toContain("within this scenario");
     expect(independent.scenarios[1]?.verificationChecks[0]?.kind).toBe("absent_after_seen");
+  });
+
+  it("plans filter prerequisites using current-scenario identities and independently observed completion states", async () => {
+    const context = makeApplicationContext();
+    const agent = new FakePlanner(() => validFilterPlan(context));
+    await expect(createScenarioPlan(agent, filterIssue, context)).resolves.toEqual(validFilterPlan(context));
+    expect(agent.prompts[0]).toContain("independently observe each included subject as unchecked and each excluded subject as checked");
+    expect(agent.prompts[0]).toContain("before selecting the final filter");
+    expect(agent.prompts[0]).toContain("A task merely named \"COMPLETED\" does not prove completion");
+    expect(agent.prompts[0]).toContain("inspect and restore a suitable visible state");
+    expect(agent.prompts[0]).toContain("literal names observed during exploration or previous runs");
+  });
+
+  it.each([
+    ["missing included subject", [], ["{{uniqueTaskText}}-COMPLETED"], /both included and excluded text/],
+    ["missing excluded subject", ["{{uniqueTaskText}}-ACTIVE"], [], /both included and excluded text/],
+    ["stale included identity", ["QA-old-run-ACTIVE"], ["{{uniqueTaskText}}-COMPLETED"], /current-scenario task markers/],
+    ["stale excluded identity", ["{{uniqueTaskText}}-ACTIVE"], ["QA-old-run-COMPLETED"], /current-scenario task markers/],
+    ["shared task identity", ["{{uniqueTaskText}}-TASK"], ["{{uniqueTaskText}}-TASK"], /distinct, non-overlapping/],
+    ["overlapping task identities", ["{{uniqueTaskText}}"], ["{{uniqueTaskText}}-COMPLETED"], /distinct, non-overlapping/],
+    ["duplicate included identity", ["{{uniqueTaskText}}-ACTIVE", "{{uniqueTaskText}}-ACTIVE"], ["{{uniqueTaskText}}-COMPLETED"], /distinct, non-overlapping/],
+  ] as const)("rejects filter plans with %s", (_label, expectedVisible, expectedAbsent, error) => {
+    const context = makeApplicationContext();
+    const plan = validFilterPlan(context);
+    plan.scenarios[0]!.verificationChecks[0]!.expectedVisible = [...expectedVisible];
+    plan.scenarios[0]!.verificationChecks[0]!.expectedAbsent = [...expectedAbsent];
+    expect(() => validateScenarioPlan(plan, filterIssue, context)).toThrow(error);
+  });
+
+  it("repairs stale filter identities before a plan can be executed", async () => {
+    const context = makeApplicationContext();
+    const stale = validFilterPlan(context);
+    stale.scenarios[0]!.verificationChecks[0]!.expectedAbsent = ["QA-previous-run-COMPLETED"];
+    const agent = new FakePlanner((_prompt, call) => call === 1 ? stale : validFilterPlan(context));
+    await expect(createScenarioPlan(agent, filterIssue, context)).resolves.toEqual(validFilterPlan(context));
+    expect(agent.calls).toBe(2);
+    expect(agent.prompts[1]).toContain("current-scenario task markers");
   });
 
   it("rejects missing, malformed, blocked, or mismatched application context", () => {

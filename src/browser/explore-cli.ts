@@ -7,6 +7,7 @@ async function main(): Promise<void> {
     targetUrl: config.TARGET_URL,
     runId: createExplorationRunId(),
     headless: config.HEADLESS,
+    navigationTimeoutMs: config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
   });
   process.stdout.write(`Application exploration ${context.status}: ${context.targetUrl}\n`);
   process.stdout.write("Context: evidence/application-context.json\n");

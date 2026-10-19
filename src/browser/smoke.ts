@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   let navigationExecuted = false;
 
   try {
-    browser = new PlaywrightMcp(config.HEADLESS);
+    browser = new PlaywrightMcp(config.HEADLESS, config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS);
     const discovered = await browser.connect();
     toolNames = discovered.map((tool) => tool.name);
     permittedTools = getPermittedTools(discovered).map(({ name, inputSchema }) => ({ name, inputSchema }));
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     }
     const navigationArguments = validateToolAction("browser_navigate", { url: config.TARGET_URL }, discovered, config.TARGET_URL);
     validateToolAction("browser_snapshot", {}, discovered, config.TARGET_URL);
-    const navigation = await browser.call("browser_navigate", navigationArguments);
+    const navigation = await browser.call("browser_navigate", navigationArguments, config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS);
     if (navigation.isError) throw new Error(`Navigation failed: ${navigation.text}`);
     const consoleSummary = navigation.text.match(/Console:\s*(\d+)\s+errors?/i);
     if (consoleSummary) consoleErrorsReported = Number(consoleSummary[1]);

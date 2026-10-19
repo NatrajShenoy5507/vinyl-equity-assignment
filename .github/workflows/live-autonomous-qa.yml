@@ -3,18 +3,32 @@ name: Live Autonomous QA Testing
 
 on:
   workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "GitHub issue number to test"
+        required: true
+        type: number
+  issues:
+    types: [labeled]
 
 permissions:
   contents: read
+  issues: read
 
 jobs:
   autonomous-qa:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'RFQA')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     env:
       HEADLESS: "true"
-      GEMINI_MODEL: gemini-3.1-flash-lite
+      GEMINI_MODEL: gemini-3.5-flash-lite
+      PLAYWRIGHT_NAVIGATION_TIMEOUT_MS: "60000"
+      MAX_SCENARIO_SECONDS: "180"
+      ISSUE_NUMBER: ${{ github.event_name == 'issues' && github.event.issue.number || inputs.issue_number }}
 
     steps:
       - name: Checkout repository
@@ -38,15 +52,16 @@ jobs:
       - name: Verify Playwright MCP
         run: npm run qa:browser-smoke
 
-      - name: Run live autonomous scenario
+      - name: Run autonomous QA for GitHub issue
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -z "$GEMINI_API_KEY" ]; then
             echo "GEMINI_API_KEY secret is missing."
             exit 1
           fi
-          npm run qa:mock -- --scenario=SC-01
+          npm run qa:github -- --repo="$GITHUB_REPOSITORY" --issue="$ISSUE_NUMBER"
 
       - name: Upload QA evidence
         if: always()

@@ -502,6 +502,92 @@ describe("report generation", () => {
     expect(markdown).toContain("Host-verified assertion outcomes");
     expect(markdown).toContain("browser_click");
   });
+
+  it("reports authoritative host snapshot references alongside advisory model claims", () => {
+    const snapshotPath = resolve(evidenceDirectory, "runs", "host-audit", "snapshots", "SC-01-01.txt");
+    const scenarios = [baseScenario({
+      hostVerification: [{
+        acceptanceCriterionId: "AC-01", status: "PASS", reason: "Task found in a listitem.", evidence: [snapshotPath],
+      }],
+      modelAssessments: [{
+        acceptanceCriteriaId: "AC-01", meets: true,
+        observedEvidence: "The new task appears in the list.", explanation: "Created successfully.",
+        evidenceStatus: "UNSUPPORTED", snapshotReferences: [],
+      }],
+      modelAssessmentWarnings: ["AC-01 model evidence claim did not match a post-action snapshot; host verification is authoritative."],
+    })];
+    const report = buildReport({
+      runId: "host-audit", source: "mock", model: "gemini-test", issueNumber: 1, issueTitle: "Todos",
+      targetUrl: "https://example.test/", startedAt: "start", completedAt: "end", scenarios,
+      acceptanceCriteria: buildAcceptanceCriteriaTrace(criteria, scenarios),
+    });
+    const markdown = renderMarkdown(report);
+    expect(report.status).toBe("PASS");
+    expect(markdown).toContain("AC-01: **PASS** — Task found in a listitem.");
+    expect(markdown).toContain("Evidence: [runs/host-audit/snapshots/SC-01-01.txt](./runs/host-audit/snapshots/SC-01-01.txt)");
+    expect(markdown).toContain("Model assessments (advisory; host checks determine scenario status)");
+    expect(markdown).toContain("Model evidence claim:** **UNSUPPORTED**");
+    expect(markdown).toContain("```text\nThe new task appears in the list.\n```");
+    expect(markdown).toContain("Model assessment audit warnings");
+    expect(markdown).toContain("Matching host snapshot references:** none");
+  });
+
+  it("never renders raw snapshots or unrelated file paths as evidence links", () => {
+    const snapshot = "### Snapshot\n```yaml\n- list:\n  - listitem:\n    - generic: Created todo\n```";
+    const scenarios = [baseScenario({
+      hostVerification: [{
+        acceptanceCriterionId: "AC-01", status: "PASS", reason: "Verified", evidence: [snapshot, "[fake](javascript:alert(1))", resolve(evidenceDirectory, "..", "unrelated.txt")],
+      }],
+    })];
+    const markdown = renderMarkdown(buildReport({
+      runId: "legacy-evidence", source: "mock", model: "gemini-test", issueNumber: 1, issueTitle: "Todos",
+      targetUrl: "https://example.test/", startedAt: "start", completedAt: "end", scenarios,
+      acceptanceCriteria: buildAcceptanceCriteriaTrace(criteria, scenarios),
+    }));
+    expect(markdown).toContain("Inline observation (see JSON report)");
+    expect(markdown).not.toContain("[### Snapshot");
+    expect(markdown).not.toContain("javascript:");
+    expect(markdown).not.toContain("unrelated.txt]");
+    expect(markdown).not.toContain("Created todo");
+  });
+
+  it("fences model-authored evidence without allowing its own fences to become report markup", () => {
+    const snapshotPath = resolve(evidenceDirectory, "runs", "literal-model", "snapshots", "SC-01-01.txt");
+    const modelText = "```\n[not a trustworthy link](https://example.test/claim)\n```";
+    const scenarios = [baseScenario({
+      modelAssessments: [{
+        acceptanceCriteriaId: "AC-01", meets: false,
+        observedEvidence: modelText, explanation: "The model assessment is advisory.",
+        evidenceStatus: "MATCHED_POST_ACTION", snapshotReferences: [snapshotPath],
+      }],
+    })];
+    const markdown = renderMarkdown(buildReport({
+      runId: "literal-model", source: "mock", model: "gemini-test", issueNumber: 1, issueTitle: "Todos",
+      targetUrl: "https://example.test/", startedAt: "start", completedAt: "end", scenarios,
+    }));
+    expect(markdown).toContain(`\`\`\`\`text\n${modelText}\n\`\`\`\``);
+    expect(markdown).toContain("Model claims criterion met:** no");
+    expect(markdown).toContain("Matching host snapshot references:** [runs/literal-model/snapshots/SC-01-01.txt]");
+  });
+
+  it("resolves run report evidence links relative to the run report directory", () => {
+    const runDirectory = resolve(evidenceDirectory, "runs", "scoped-links");
+    const snapshotPath = resolve(runDirectory, "snapshots", "SC-01-01.txt");
+    const screenshotPath = resolve(evidenceDirectory, "screenshots", "scoped-links", "SC-01-01.png");
+    const scenarios = [baseScenario({
+      evidence: [screenshotPath],
+      hostVerification: [{ acceptanceCriterionId: "AC-01", status: "PASS", reason: "Verified", evidence: [snapshotPath] }],
+    })];
+    const report = buildReport({
+      runId: "scoped-links", source: "mock", model: "gemini-test", issueNumber: 1, issueTitle: "Todos",
+      targetUrl: "https://example.test/", startedAt: "start", completedAt: "end", scenarios,
+      acceptanceCriteria: buildAcceptanceCriteriaTrace(criteria, scenarios),
+    });
+    const markdown = renderMarkdown(report, runDirectory);
+    expect(markdown).toContain("[runs/scoped-links/snapshots/SC-01-01.txt](./snapshots/SC-01-01.txt)");
+    expect(markdown).toContain("[screenshots/scoped-links/SC-01-01.png](../../screenshots/scoped-links/SC-01-01.png)");
+    expect(renderMarkdown(report)).toContain("(./runs/scoped-links/snapshots/SC-01-01.txt)");
+  });
 });
 
 describe("phase ledger", () => {

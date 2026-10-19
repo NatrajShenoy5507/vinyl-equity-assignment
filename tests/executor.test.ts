@@ -7,6 +7,8 @@ vi.mock("../src/evidence/logger.js", () => ({ appendActionLog: vi.fn(async () =>
 
 import { executeScenario, executorDecisionJsonSchema, verifyScenarioChecks, type BrowserAgent, type JsonAgent } from "../src/agents/executor.js";
 import { executorPrompt } from "../src/prompts/executor-prompt.js";
+import { appendActionLog } from "../src/evidence/logger.js";
+import { InvalidGeminiJsonError } from "../src/agents/response-diagnostics.js";
 import type { NormalizedIssue, PlannedScenario } from "../src/schemas.js";
 import type { DiscoveredTool } from "../src/browser/tool-policy.js";
 
@@ -151,31 +153,21 @@ const createTaskDecision = {
 const pageSnapshot = (content: string, url = "https://demo.test/", reference = "e1") => `- Page URL: ${url}\n- textbox [ref=${reference}]\n${content}`;
 
 function schemaToolArguments(schema: Record<string, unknown>, toolName: string): Record<string, unknown> {
-  const branches = schema.anyOf as Array<Record<string, unknown>>;
-  const branch = branches.find((candidate) => {
-    const properties = candidate.properties as Record<string, unknown>;
-    const toolNameSchema = properties.toolName as { enum?: string[] } | undefined;
-    return toolNameSchema?.enum?.includes(toolName);
-  });
-  if (!branch) throw new Error(`No structured schema branch for ${toolName}.`);
-  const argumentsSchema = (branch.properties as Record<string, unknown>).arguments as Record<string, unknown>;
-  const shapes = (argumentsSchema.anyOf as Array<Record<string, unknown>> | undefined) ?? [argumentsSchema];
-  const required = tools.find(({ name }) => name === toolName)!.inputSchema.required ?? [];
-  const shape = shapes.find((candidate) => JSON.stringify(candidate.required) === JSON.stringify(required));
-  if (!shape) throw new Error(`No structured arguments shape for ${toolName}.`);
-  return shape;
+  const properties = schema.properties as Record<string, unknown>;
+  const names = properties.toolName as { enum: string[] };
+  if (!names.enum.includes(toolName)) throw new Error(`Tool ${toolName} is absent from the structured schema.`);
+  return properties.arguments as Record<string, unknown>;
 }
 
 describe("autonomous executor evidence gates", () => {
   it("shares a compact typed action envelope and excludes tools outside the MCP allowlist", () => {
     const schema = executorDecisionJsonSchema([...tools, { name: "browser_run_code", inputSchema: { type: "object" } }]);
-    const branches = schema.anyOf as Array<Record<string, unknown>>;
-    expect(branches).toHaveLength(2);
-    const actionProperties = branches[1]!.properties as Record<string, unknown>;
+    expect(schema.anyOf).toBeUndefined();
+    expect(schema.required).toEqual(["kind", "rationale"]);
+    const actionProperties = schema.properties as Record<string, unknown>;
     expect(actionProperties.toolName).toEqual({ type: "string", enum: tools.slice(0, -1).map(({ name }) => name) });
-    const argumentShapes = (actionProperties.arguments as Record<string, unknown>).anyOf as Array<Record<string, unknown>>;
-    expect(argumentShapes).toHaveLength(4);
-    expect(argumentShapes.every((shape) => shape.type === "object" && shape.additionalProperties === false)).toBe(true);
+    expect(actionProperties.arguments).toMatchObject({ type: "object", additionalProperties: false });
+    expect((actionProperties.arguments as Record<string, unknown>).anyOf).toBeUndefined();
     expect(JSON.stringify(schema).length).toBeLessThan(1_800);
   });
 
@@ -235,7 +227,9 @@ describe("autonomous executor evidence gates", () => {
   it("rejects fabricated PASS evidence", async () => {
     const result = await run([createTaskDecision, passDecision("I saw a task that was not in the snapshot.")], [pageSnapshot("Initial"), pageSnapshot("Todo list")]);
     expect(result.status).toBe("BLOCKED");
-    expect(result.reason).toMatch(/does not exactly match any post-action/);
+    expect(result.reason).toMatch(/Visible-content check is inconclusive/);
+    expect(result.hostVerification?.[0]?.status).toBe("BLOCKED");
+    expect(result.modelAssessments?.[0]?.evidenceStatus).toBe("UNSUPPORTED");
   });
 
   it("stops at the action budget", async () => {
@@ -289,12 +283,13 @@ describe("autonomous executor evidence gates", () => {
     expect(result.recoveryCount).toBe(1);
     expect(agent.calls).toBe(2);
     const argumentsSchema = schemaToolArguments(agent.schemas[1]!, "browser_click");
-    expect(argumentsSchema.required).toEqual(["target"]);
+    expect(argumentsSchema.properties).toHaveProperty("target", { type: "string" });
+    expect(agent.prompts[1]).toContain("Missing required arguments for browser_click: target");
     expect(argumentsSchema.additionalProperties).toBe(false);
     expect(browser.calls).not.toContain("browser_click");
   });
 
-  it("executes a corrected action after one schema-constrained argument retry", async () => {
+  it("executes a corrected action after one exact-tool-validated argument retry", async () => {
     const agent = new FakeAgent([
       { kind: "action", toolName: "browser_type", arguments: {}, rationale: "Missing required fields." },
       { kind: "action", toolName: "browser_type", arguments: { target: "e1", text: "QA-TEST-SC-01" }, rationale: "Use the observed textbox." },
@@ -316,18 +311,14 @@ describe("autonomous executor evidence gates", () => {
     expect(result.actionCount).toBe(1);
     expect(result.recoveryCount).toBe(1);
     const initialArguments = schemaToolArguments(agent.schemas[0]!, "browser_type");
-    expect(initialArguments.required).toEqual(["target", "text"]);
+    expect(initialArguments.properties).toMatchObject({ target: { type: "string" }, text: { type: "string" } });
     expect(initialArguments.additionalProperties).toBe(false);
-    const finishSchema = agent.schemas[0]!.anyOf as Array<Record<string, unknown>>;
-    const finishBranch = finishSchema.find((branch) => {
-      const properties = branch.properties as Record<string, unknown>;
-      return (properties.kind as { enum?: string[] }).enum?.[0] === "finish";
-    })!;
-    const assessmentItems = ((finishBranch.properties as Record<string, unknown>).assessments as Record<string, unknown>).items as Record<string, unknown>;
+    const assessmentItems = ((agent.schemas[0]!.properties as Record<string, unknown>).assessments as Record<string, unknown>).items as Record<string, unknown>;
     expect((assessmentItems.properties as Record<string, unknown>).acceptanceCriteriaId).toEqual({ type: "string" });
     expect(assessmentItems.required).toContain("acceptanceCriteriaId");
     const retryArguments = schemaToolArguments(agent.schemas[1]!, "browser_type");
-    expect(retryArguments.required).toEqual(["target", "text"]);
+    expect(retryArguments.properties).toMatchObject({ target: { type: "string" }, text: { type: "string" } });
+    expect((agent.schemas[1]!.properties as Record<string, unknown>).toolName).toEqual({ type: "string", enum: ["browser_type"] });
     expect(retryArguments.additionalProperties).toBe(false);
   });
 
@@ -351,7 +342,8 @@ describe("autonomous executor evidence gates", () => {
     });
     expect(result).toMatchObject({ status: "PASS", actionCount: 1, recoveryCount: 1 });
     const argumentsSchema = schemaToolArguments(agent.schemas[0]!, "browser_type");
-    expect(argumentsSchema.required).toEqual(["target", "text"]);
+    expect(argumentsSchema.properties).toMatchObject({ target: { type: "string" }, text: { type: "string" } });
+    expect(agent.prompts[1]).toContain("Missing required arguments for browser_type: text");
   });
 
   it("classifies Gemini quota exhaustion as BLOCKED and makes no retry request", async () => {
@@ -569,14 +561,16 @@ describe("autonomous executor evidence gates", () => {
         expectedAbsent: ["{{uniqueTaskText}}-COMPLETED"],
       }],
     };
-    const beforeFilter = pageSnapshot(`- listitem: ${unique}-ACTIVE\n- listitem: ${unique}-COMPLETED`);
+    const beforeFilter = pageSnapshot(`- listitem: ${unique}-ACTIVE\n  - checkbox "Complete" [unchecked]\n- listitem: ${unique}-COMPLETED\n  - checkbox "Complete" [checked]`);
     const filtered = pageSnapshot(`link "Active" [current]\n- listitem: ${unique}-ACTIVE`);
     const filterPass = verifyScenarioChecks(filterScenario, filterIssue, unique, [
-      { stage: "initial", text: beforeFilter },
+      { stage: "initial", text: pageSnapshot("Empty task list") },
+      { stage: "post_action", text: beforeFilter },
       { stage: "post_action", text: filtered },
     ]);
     const filterFail = verifyScenarioChecks(filterScenario, filterIssue, unique, [
-      { stage: "initial", text: beforeFilter },
+      { stage: "initial", text: pageSnapshot("Empty task list") },
+      { stage: "post_action", text: beforeFilter },
       { stage: "post_action", text: pageSnapshot(`link "Active" [current]\n- listitem: ${unique}-ACTIVE\n- listitem: ${unique}-COMPLETED`) },
     ]);
     expect(filterPass[0]?.status).toBe("PASS");
@@ -592,13 +586,17 @@ describe("autonomous executor evidence gates", () => {
         expectedAbsent: ["{{uniqueTaskText}}"],
       }],
     };
+    const beforeRemoval = pageSnapshot(`- listitem: ${unique}\n  - button "Remove" [ref=e9]`);
+    const removalAction = { toolName: "browser_click", arguments: { target: "e9" } };
     expect(verifyScenarioChecks(deletionScenario, issue, unique, [
-      { stage: "initial", text: pageSnapshot(`- listitem: ${unique}`) },
-      { stage: "post_action", text: pageSnapshot(`textbox "New todo" [placeholder=${unique}]\nTodo list empty`) },
+      { stage: "initial", text: pageSnapshot("Empty list") },
+      { stage: "post_action", text: beforeRemoval },
+      { stage: "post_action", text: pageSnapshot(`textbox "New todo" [placeholder=${unique}]\nTodo list empty`), action: removalAction },
     ])[0]?.status).toBe("PASS");
     expect(verifyScenarioChecks(deletionScenario, issue, unique, [
-      { stage: "initial", text: pageSnapshot(`- listitem: ${unique}`) },
-      { stage: "post_action", text: pageSnapshot(`- listitem: ${unique}`) },
+      { stage: "initial", text: pageSnapshot("Empty list") },
+      { stage: "post_action", text: beforeRemoval },
+      { stage: "post_action", text: pageSnapshot(`- listitem: ${unique}`), action: removalAction },
     ])[0]?.status).toBe("FAIL");
   });
 
@@ -619,5 +617,171 @@ describe("autonomous executor evidence gates", () => {
     expect(result.status).toBe("BLOCKED");
     expect(result.reason).toMatch(/Gemini executor request budget/);
     expect(agent.calls).toBe(1);
+  });
+});
+
+describe("bounded invalid executor response recovery", () => {
+  const invalidResponses: Array<{ label: string; response: unknown }> = [
+    { label: "null", response: null },
+    { label: "false", response: false },
+    { label: "true", response: true },
+    { label: "empty object", response: {} },
+    { label: "array", response: [] },
+    { label: "number", response: 5 },
+    { label: "unknown kind", response: { kind: "unexpected", rationale: "Unrecognized discriminator" } },
+    { label: "missing action arguments", response: { kind: "action", toolName: "browser_type", rationale: "Create task" } },
+    { label: "missing toolName", response: { kind: "action", arguments: {}, rationale: "Create task" } },
+    { label: "missing rationale", response: { kind: "action", toolName: "browser_type", arguments: { target: "e1", text: "Task" } } },
+    { label: "missing finish assessments", response: { kind: "finish", rationale: "Finish" } },
+    { label: "empty assessments", response: { kind: "finish", assessments: [], rationale: "Finish" } },
+    { label: "missing assessment fields", response: { kind: "finish", assessments: [{ acceptanceCriterionId: "AC-01" }], rationale: "Finish" } },
+  ];
+
+  async function executeWith(agent: FakeAgent, browser = new FakeBrowser([pageSnapshot("Initial")]), overrides: Partial<{
+    maxRecoveryRetries: number; maxModelRequests: number; maxSeconds: number;
+  }> = {}) {
+    screenshotDirectory = await mkdtemp(join(tmpdir(), "ui-qa-executor-"));
+    const result = await executeScenario({
+      agent, browser, issue, scenario, runId: "TEST", scenarioIndex: 1, screenshotDirectory,
+      limits: { maxActions: 10, maxModelRequests: 10, maxSeconds: 10, maxRecoveryRetries: 1, ...overrides },
+    });
+    return { result, browser };
+  }
+
+  it.each(invalidResponses)("blocks repeated $label responses after exactly one recovery without unsafe actions", async ({ response }) => {
+    vi.mocked(appendActionLog).mockClear();
+    // A larger caller limit must never permit a second model-decision repair.
+    const agent = new FakeAgent([response, response, createTaskDecision]);
+    const { result, browser } = await executeWith(agent, undefined, { maxRecoveryRetries: 5 });
+    expect(result).toMatchObject({ status: "BLOCKED", actionCount: 0, modelRequestCount: 2, recoveryCount: 1 });
+    expect(result.reason).toMatch(/^Gemini executor response failed validation:/);
+    expect(result.evidence).toHaveLength(1);
+    expect(result.hostVerification).toEqual([]);
+    expect(agent.calls).toBe(2);
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
+    expect(agent.prompts[1]).toContain("The previous response failed validation");
+    expect(agent.prompts[1]).toContain("only response-validation recovery");
+    const invalidEvents = vi.mocked(appendActionLog).mock.calls.map(([event]) => event)
+      .filter((event) => event.event === "executor_response_invalid");
+    expect(invalidEvents).toHaveLength(2);
+    expect(invalidEvents[0]).toMatchObject({ runId: "TEST", scenarioId: "SC-01", requestCount: 1 });
+    expect(invalidEvents[1]).toMatchObject({ requestCount: 2, invalidDecisionRecoveryCount: 1 });
+  });
+
+  it.each([null, false, {}, new InvalidGeminiJsonError(), new InvalidGeminiJsonError("empty")])(
+    "recovers an invalid response with a verified action and independent post-action evidence (%j)", async (response) => {
+      const agent = new FakeAgent([response, createTaskDecision, passDecision("QA-TEST-SC-01")]);
+      const browser = new FakeBrowser([pageSnapshot("Initial"), pageSnapshot("- listitem: QA-TEST-SC-01")]);
+      const { result } = await executeWith(agent, browser);
+      expect(result).toMatchObject({ status: "PASS", actionCount: 1, modelRequestCount: 3, recoveryCount: 1 });
+      expect(result.hostVerification?.[0]).toMatchObject({ acceptanceCriterionId: "AC-01", status: "PASS" });
+      expect(result.evidence).toHaveLength(3);
+      expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot", "browser_type", "browser_snapshot"]);
+    },
+  );
+
+  it("requires the recovery response to pass Zod and exact tool validation before any action", async () => {
+    const unsafe = { kind: "action", toolName: "browser_click", arguments: { text: "not click arguments" }, rationale: "Use the wrong tool shape" };
+    const agent = new FakeAgent([{}, unsafe, createTaskDecision]);
+    const { result, browser } = await executeWith(agent);
+    expect(result).toMatchObject({ status: "BLOCKED", actionCount: 0, modelRequestCount: 2, recoveryCount: 1 });
+    expect(result.reason).toContain("Missing required arguments for browser_click: target");
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
+  });
+
+  it.each([
+    { label: "unsafe tool", decision: { kind: "action", toolName: "browser_run_code_unsafe", arguments: {}, rationale: "Run code" } },
+    { label: "off-origin navigation", decision: { kind: "action", toolName: "browser_navigate", arguments: { url: "https://other.test/" }, rationale: "Navigate away" } },
+    { label: "stale reference", decision: { ...clickDecision, arguments: { target: "e999" } } },
+  ])("rejects a corrected response containing $label", async ({ decision }) => {
+    const agent = new FakeAgent([false, decision, createTaskDecision]);
+    const { result, browser } = await executeWith(agent, undefined, { maxRecoveryRetries: 5 });
+    expect(result).toMatchObject({ status: "BLOCKED", actionCount: 0, modelRequestCount: 2 });
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
+    expect(agent.calls).toBe(2);
+  });
+
+  it("never treats a corrected finish with fabricated evidence as PASS", async () => {
+    const agent = new FakeAgent([{}, passDecision("fabricated page evidence")]);
+    const { result, browser } = await executeWith(agent);
+    expect(result).toMatchObject({ status: "BLOCKED", actionCount: 0, modelRequestCount: 2, recoveryCount: 1 });
+    expect(result.reason).toMatch(/No post-action accessibility snapshot/);
+    expect(result.hostVerification?.[0]?.status).toBe("BLOCKED");
+    expect(result.modelAssessments?.[0]?.evidenceStatus).toBe("UNSUPPORTED");
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
+  });
+
+  it("does not grant another repair after a corrected action executes", async () => {
+    const agent = new FakeAgent([{}, createTaskDecision, false, createTaskDecision]);
+    const browser = new FakeBrowser([pageSnapshot("Initial"), pageSnapshot("- listitem: QA-TEST-SC-01")]);
+    const { result } = await executeWith(agent, browser, { maxRecoveryRetries: 5 });
+    expect(result).toMatchObject({ status: "BLOCKED", actionCount: 1, modelRequestCount: 3, recoveryCount: 1 });
+    expect(agent.calls).toBe(3);
+  });
+
+  it.each([
+    { label: "disabled recovery", maxRecoveryRetries: 0, maxModelRequests: 10 },
+    { label: "exhausted request budget", maxRecoveryRetries: 1, maxModelRequests: 1 },
+  ])("respects $label when deciding whether to request a repair", async ({ maxRecoveryRetries, maxModelRequests }) => {
+    const agent = new FakeAgent([{}, createTaskDecision]);
+    const { result, browser } = await executeWith(agent, undefined, { maxRecoveryRetries, maxModelRequests });
+    expect(result.status).toBe("BLOCKED");
+    expect(result.actionCount).toBe(0);
+    expect(result.modelRequestCount).toBe(1);
+    expect(agent.calls).toBe(1);
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
+  });
+
+  it("keeps the recovery request within the remaining scenario deadline", async () => {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const agent = new FakeAgent([{}, createTaskDecision]);
+    const generateJson = agent.generateJson.bind(agent);
+    vi.spyOn(agent, "generateJson").mockImplementation(async (...args) => {
+      const response = await generateJson(...args);
+      now += 500;
+      return response;
+    });
+    const { result, browser } = await executeWith(agent, undefined, { maxSeconds: 1 });
+    expect(agent.timeouts).toEqual([1_000, 500]);
+    expect(result).toMatchObject({ status: "BLOCKED", actionCount: 0, modelRequestCount: 2 });
+    expect(result.reason).toBe("Scenario time limit reached while awaiting the Gemini decision.");
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot"]);
+  });
+
+  it("redacts model-controlled discriminator values, keys and body from rejection logs and feedback", async () => {
+    vi.mocked(appendActionLog).mockClear();
+    const secret = "private-page-content-and-api-key";
+    const response = { kind: secret, [secret]: secret, rationale: secret };
+    const agent = new FakeAgent([response, response]);
+    const { result } = await executeWith(agent);
+    const events = vi.mocked(appendActionLog).mock.calls.map(([event]) => event);
+    const invalid = events.find((event) => event.event === "executor_response_invalid");
+    expect(invalid).toMatchObject({
+      responseType: "object", responseTopLevelKeys: ["kind", "rationale"],
+      responseUnknownTopLevelKeyCount: 1, responseDiscriminator: "unknown_string",
+      responseByteCount: Buffer.byteLength(JSON.stringify(response)),
+    });
+    expect(JSON.stringify({ events, reason: result.reason, feedback: agent.prompts[1] })).not.toContain(secret);
+  });
+
+  it("redacts stale-reference decision content and supplies reference-validation feedback to its one recovery", async () => {
+    vi.mocked(appendActionLog).mockClear();
+    const secret = "sensitive-invalid-decision-content";
+    const agent = new FakeAgent([
+      { ...createTaskDecision, arguments: { target: "e999", text: secret }, rationale: secret },
+      {},
+      createTaskDecision,
+    ]);
+    const browser = new FakeBrowser([pageSnapshot("Initial"), pageSnapshot("Fresh state")]);
+    const { result } = await executeWith(agent, browser, { maxRecoveryRetries: 5 });
+    expect(result).toMatchObject({ status: "BLOCKED", actionCount: 0, modelRequestCount: 2, recoveryCount: 1 });
+    expect(agent.prompts[1]).toContain("Element reference e999 is not present in the latest accessibility snapshot");
+    const events = vi.mocked(appendActionLog).mock.calls.map(([event]) => event);
+    expect(events.find((event) => event.status === "stale_reference")).toMatchObject({
+      event: "executor_response_invalid", responseDiscriminator: "action", responseType: "object",
+    });
+    expect(JSON.stringify({ events, reason: result.reason, feedback: agent.prompts[1] })).not.toContain(secret);
+    expect(browser.calls).toEqual(["browser_navigate", "browser_snapshot", "browser_snapshot"]);
   });
 });

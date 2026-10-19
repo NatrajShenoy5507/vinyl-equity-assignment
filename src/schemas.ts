@@ -106,12 +106,27 @@ export interface ScenarioVerification {
   evidence: string[];
 }
 
+export interface ScenarioModelAssessment {
+  acceptanceCriteriaId: string;
+  meets: boolean;
+  observedEvidence: string;
+  explanation: string;
+  evidenceStatus: "MATCHED_POST_ACTION" | "UNSUPPORTED";
+  snapshotReferences: string[];
+}
+
 export interface ScenarioResult {
   scenarioId: string;
   title: string;
   acceptanceCriteriaIds: string[];
   status: ScenarioStatus;
   hostVerifiedFailure?: boolean;
+  infrastructureError?: {
+    source: "gemini" | "browser" | "executor";
+    serviceFailure: boolean;
+    httpStatus?: number;
+    operation?: string;
+  };
   expected: string;
   observed: string;
   reason: string;
@@ -123,6 +138,8 @@ export interface ScenarioResult {
   verificationStrategy?: string;
   browserActions?: ScenarioBrowserAction[];
   hostVerification?: ScenarioVerification[];
+  modelAssessments?: ScenarioModelAssessment[];
+  modelAssessmentWarnings?: string[];
   executionDurationMs?: number;
   modelRequestCount?: number;
   revalidation?: ScenarioRevalidation;

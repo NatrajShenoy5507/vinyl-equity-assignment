@@ -4,6 +4,7 @@ import { relative, resolve } from "node:path";
 import { z } from "zod";
 import { appendActionLog, evidenceDirectory } from "../evidence/logger.js";
 import { PlaywrightMcp } from "./playwright-mcp.js";
+import { DEFAULT_NAVIGATION_TIMEOUT_MS } from "./browser-errors.js";
 import { validateToolAction, type DiscoveredTool } from "./tool-policy.js";
 
 const semanticControlRoles = [
@@ -69,7 +70,7 @@ export type ApplicationContext = z.infer<typeof applicationContextSchema>;
 
 export interface ExplorationBrowser {
   connect(): Promise<DiscoveredTool[]>;
-  call(name: string, args?: Record<string, unknown>): Promise<{ text: string; isError: boolean; raw: unknown }>;
+  call(name: string, args?: Record<string, unknown>, timeoutMs?: number): Promise<{ text: string; isError: boolean; raw: unknown }>;
   screenshot(filePath: string): Promise<void>;
   close(): Promise<void>;
 }
@@ -78,6 +79,7 @@ export interface ExploreApplicationOptions {
   targetUrl: string;
   runId: string;
   headless: boolean;
+  navigationTimeoutMs?: number;
   outputPath?: string;
   screenshotPath?: string;
   createBrowser?: (headless: boolean) => ExplorationBrowser;
@@ -175,7 +177,7 @@ export async function exploreApplication(options: ExploreApplicationOptions): Pr
   };
 
   try {
-    browser = (options.createBrowser ?? ((headless) => new PlaywrightMcp(headless)))(options.headless);
+    browser = (options.createBrowser ?? ((headless) => new PlaywrightMcp(headless, options.navigationTimeoutMs)))(options.headless);
     tools = await browser.connect();
   } catch (error) {
     await recordFailure("connect", error);
@@ -184,7 +186,7 @@ export async function exploreApplication(options: ExploreApplicationOptions): Pr
   if (browser && tools.length > 0) {
     try {
       const navigateArgs = validateToolAction("browser_navigate", { url: options.targetUrl }, tools, options.targetUrl);
-      const navigation = await browser.call("browser_navigate", navigateArgs);
+      const navigation = await browser.call("browser_navigate", navigateArgs, options.navigationTimeoutMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS);
       if (navigation.isError) throw new Error(`Navigation failed: ${navigation.text}`);
       await logAction({
         timestamp: new Date().toISOString(),

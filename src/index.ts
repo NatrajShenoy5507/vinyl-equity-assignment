@@ -211,6 +211,7 @@ export async function main(): Promise<number> {
     runId,
     headless: config.HEADLESS,
     outputPath: applicationContextPath,
+    navigationTimeoutMs: config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
   });
   await dualWriteExistingFile(runId, applicationContextPath, "application-context.json");
   const applicationContextArtifacts = [
@@ -294,7 +295,7 @@ export async function main(): Promise<number> {
       let browser: PlaywrightMcp | undefined;
       let browserClosedCleanly = true;
       try {
-        browser = new PlaywrightMcp(config.HEADLESS);
+        browser = new PlaywrightMcp(config.HEADLESS, config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS);
         const discovered = await browser.connect();
         await appendActionLog({
           timestamp: new Date().toISOString(),
@@ -317,10 +318,11 @@ export async function main(): Promise<number> {
             maxSeconds: config.MAX_SCENARIO_SECONDS,
             maxRecoveryRetries: config.MAX_RECOVERY_RETRIES,
             requestTimeoutMs: config.GEMINI_EXECUTOR_TIMEOUT_MS,
+            navigationTimeoutMs: config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
           },
         });
         results.push(result);
-        geminiServiceFailed = result.status === "BLOCKED" && isGeminiServiceError(result.reason);
+        geminiServiceFailed = result.status === "BLOCKED" && result.infrastructureError?.source === "gemini" && result.infrastructureError.serviceFailure;
         if (geminiServiceFailed) blocker = `Gemini service request failed; remaining scenarios were not attempted. ${result.reason}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -355,7 +357,7 @@ export async function main(): Promise<number> {
         if (!revalidationExecuted) ledger.start(5);
         results[results.length - 1] = await revalidateScenario({
           agent,
-          createBrowser: () => new PlaywrightMcp(config.HEADLESS),
+          createBrowser: () => new PlaywrightMcp(config.HEADLESS, config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS),
           issue,
           scenario,
           originalResult: initialResult,
@@ -368,6 +370,7 @@ export async function main(): Promise<number> {
             maxSeconds: config.MAX_SCENARIO_SECONDS,
             maxRecoveryRetries: config.MAX_RECOVERY_RETRIES,
             requestTimeoutMs: config.GEMINI_EXECUTOR_TIMEOUT_MS,
+            navigationTimeoutMs: config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
           },
         });
         revalidationExecuted = true;

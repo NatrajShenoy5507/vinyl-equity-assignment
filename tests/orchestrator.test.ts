@@ -90,6 +90,7 @@ beforeEach(() => {
   mocks.config.mockReturnValue({
     GEMINI_API_KEY: "unit-test-key", GEMINI_MODEL: "gemini-unit-test", GEMINI_EXECUTOR_TIMEOUT_MS: 45_000,
     HEADLESS: true, MAX_ACTIONS_PER_SCENARIO: 10, MAX_EXECUTOR_REQUESTS_PER_SCENARIO: 20,
+    PLAYWRIGHT_NAVIGATION_TIMEOUT_MS: 75_000,
     MAX_SCENARIO_SECONDS: 120, MAX_RECOVERY_RETRIES: 1,
   });
   mocks.loadIssue.mockResolvedValue(issue);
@@ -104,9 +105,10 @@ afterEach(() => vi.restoreAllMocks());
 afterAll(async () => rm(evidenceDirectory, { recursive: true, force: true }));
 
 describe("six-phase orchestration with mocked services", () => {
-  it("marks Phase 4 BLOCKED after an HTTP 504 and records remaining scenarios as unattempted", async () => {
+  it.each([429, 503, 504])("marks Phase 4 BLOCKED after Gemini HTTP %i and records remaining scenarios as unattempted", async (status) => {
     mocks.execute.mockResolvedValueOnce(resultFor(0, {
-      status: "BLOCKED", actionCount: 0, reason: "Gemini HTTP 504 DEADLINE_EXCEEDED", modelRequestCount: 1,
+      status: "BLOCKED", actionCount: 0, reason: `Gemini HTTP ${status} service failure`, modelRequestCount: 1,
+      infrastructureError: { source: "gemini", serviceFailure: true, httpStatus: status },
     }));
 
     expect(await main()).toBe(1);
@@ -114,7 +116,7 @@ describe("six-phase orchestration with mocked services", () => {
     expect(report.status).toBe("BLOCKED");
     expect(report.totals).toEqual({ PASS: 0, FAIL: 0, BLOCKED: 2, SKIPPED: 0 });
     expect(report.phases?.find(({ phase }) => phase === 4)).toMatchObject({
-      status: "BLOCKED", errors: expect.arrayContaining([expect.stringContaining("504")]),
+      status: "BLOCKED", errors: expect.arrayContaining([expect.stringContaining(String(status))]),
     });
     expect(report.phases?.find(({ phase }) => phase === 5)?.status).toBe("NOT_RUN");
     expect(report.scenarios[1]).toMatchObject({
@@ -125,7 +127,7 @@ describe("six-phase orchestration with mocked services", () => {
     expect(mocks.close).toHaveBeenCalledOnce();
     expect(mocks.client).toHaveBeenCalledWith("unit-test-key", "gemini-unit-test", { runId: report.runId });
     expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      limits: expect.objectContaining({ requestTimeoutMs: 45_000 }),
+      limits: expect.objectContaining({ requestTimeoutMs: 45_000, navigationTimeoutMs: 75_000 }),
     }));
   });
 
@@ -136,6 +138,36 @@ describe("six-phase orchestration with mocked services", () => {
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
+  it("continues later isolated scenarios after a browser navigation timeout", async () => {
+    mocks.execute.mockResolvedValueOnce(resultFor(0, { status: "BLOCKED", actionCount: 0,
+      reason: "Playwright MCP tool browser_navigate timed out after 20000ms.", modelRequestCount: 0,
+      infrastructureError: { source: "browser", serviceFailure: false, operation: "browser_navigate" } }));
+    expect(await main()).toBe(1);
+    const report = reported();
+    expect(mocks.execute).toHaveBeenCalledTimes(2); expect(mocks.connect).toHaveBeenCalledTimes(2); expect(mocks.close).toHaveBeenCalledTimes(2);
+    expect(report.totals).toEqual({ PASS: 1, FAIL: 0, BLOCKED: 1, SKIPPED: 0 });
+    expect(report.scenarios[1]).toMatchObject({ scenarioId: "SC-02", status: "PASS" });
+    expect(report.phases?.find(({ phase }) => phase === 4)).toMatchObject({ status: "BLOCKED", errors: expect.arrayContaining([expect.stringContaining("browser_navigate")]) });
+    expect(JSON.stringify(report)).not.toContain("Gemini service request failed");
+    expect(mocks.explore).toHaveBeenCalledWith(expect.objectContaining({ navigationTimeoutMs: 75_000 }));
+  });
+
+  it("does not infer Gemini outages from an untyped scenario reason", async () => {
+    mocks.execute.mockResolvedValueOnce(resultFor(0, { status: "BLOCKED", reason: "HTTP 504 DEADLINE_EXCEEDED; timed out", actionCount: 0 }));
+    await main();
+    expect(mocks.execute).toHaveBeenCalledTimes(2);
+    expect(reported().scenarios[1]?.status).toBe("PASS");
+  });
+
+  it("continues after a timed-out browser connection in its own scenario", async () => {
+    mocks.connect.mockRejectedValueOnce(new Error("Playwright MCP connection timed out after 30000ms."));
+    await main();
+    expect(mocks.connect).toHaveBeenCalledTimes(2); expect(mocks.close).toHaveBeenCalledTimes(2);
+    expect(mocks.execute).toHaveBeenCalledOnce();
+    expect(reported().scenarios[1]?.status).toBe("PASS");
+    expect(JSON.stringify(reported())).not.toContain("Gemini service request failed");
+  });
+
   it("forwards the configured request timeout into conditional failure revalidation", async () => {
     const failure = resultFor(0, { status: "FAIL", hostVerifiedFailure: true });
     mocks.execute.mockResolvedValueOnce(failure);
@@ -143,7 +175,7 @@ describe("six-phase orchestration with mocked services", () => {
     expect(await main()).toBe(1);
     expect(mocks.revalidate).toHaveBeenCalledWith(expect.objectContaining({
       originalResult: failure,
-      limits: expect.objectContaining({ requestTimeoutMs: 45_000 }),
+      limits: expect.objectContaining({ requestTimeoutMs: 45_000, navigationTimeoutMs: 75_000 }),
     }));
   });
 

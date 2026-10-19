@@ -5,6 +5,7 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
   GEMINI_EXECUTOR_TIMEOUT_MS: z.coerce.number().int().min(1).max(600_000).default(30_000),
+  PLAYWRIGHT_NAVIGATION_TIMEOUT_MS: z.coerce.number().int().min(1).max(600_000).default(60_000),
   TARGET_URL: z.string().url().default("https://demo.playwright.dev/todomvc/"),
   GITHUB_TOKEN: z.string().optional(),
   MAX_ACTIONS_PER_SCENARIO: z.coerce.number().int().min(1).max(50).default(15),

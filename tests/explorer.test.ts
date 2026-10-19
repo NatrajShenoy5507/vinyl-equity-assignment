@@ -66,6 +66,15 @@ const snapshotResponse = `### Page
 \`\`\``;
 
 describe("application exploration", () => {
+  it("forwards a custom navigation timeout without extending snapshot or screenshot defaults", async () => {
+    const paths = await makeOutputPaths(); const browser = mockBrowser();
+    const context = await exploreApplication({ targetUrl, runId: "configured-navigation", headless: true, navigationTimeoutMs: 90_000,
+      outputPath: paths.outputPath, screenshotPath: paths.screenshotPath, createBrowser: () => browser, logAction: async () => undefined });
+    expect(context.status).toBe("PASS");
+    expect(browser.call).toHaveBeenNthCalledWith(1, "browser_navigate", { url: targetUrl }, 90_000);
+    expect(browser.call).toHaveBeenNthCalledWith(2, "browser_snapshot", {});
+    expect(browser.screenshot).toHaveBeenCalledWith(paths.screenshotPath);
+  });
   it("persists a validated context derived only from observed MCP data", async () => {
     const paths = await makeOutputPaths();
     const browser = mockBrowser();
@@ -98,7 +107,7 @@ describe("application exploration", () => {
     expect(context.evidence.screenshot).toContain("exploration.png");
     expect(await readFile(paths.screenshotPath, "utf8")).toBe("mock screenshot");
     expect(browser.call).toHaveBeenCalledTimes(2);
-    expect(browser.call).toHaveBeenNthCalledWith(1, "browser_navigate", { url: targetUrl });
+    expect(browser.call).toHaveBeenNthCalledWith(1, "browser_navigate", { url: targetUrl }, 60_000);
     expect(browser.call).toHaveBeenNthCalledWith(2, "browser_snapshot", {});
     expect(browser.close).toHaveBeenCalledOnce();
   });

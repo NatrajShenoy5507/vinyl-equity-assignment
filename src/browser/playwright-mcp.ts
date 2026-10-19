@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { z } from "zod";
 import { validateToolArguments, validateToolAction, type DiscoveredTool } from "./tool-policy.js";
+import { BrowserToolError, DEFAULT_NAVIGATION_TIMEOUT_MS } from "./browser-errors.js";
 
 const callResultSchema = z.object({
   content: z.array(z.unknown()).optional(),
@@ -22,6 +23,8 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation:
         timer = setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms.`)), timeoutMs);
       }),
     ]);
+  } catch (error) {
+    throw error instanceof BrowserToolError ? error : new BrowserToolError(operation, error, timeoutMs);
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -32,12 +35,14 @@ export class PlaywrightMcp {
   private readonly transport: StdioClientTransport;
   private tools: DiscoveredTool[] = [];
 
-  constructor(private readonly headless: boolean) {
+  constructor(private readonly headless: boolean, private readonly navigationTimeoutMs = DEFAULT_NAVIGATION_TIMEOUT_MS) {
+    if (!Number.isInteger(navigationTimeoutMs) || navigationTimeoutMs < 1 || navigationTimeoutMs > 600_000) throw new Error("Playwright navigation timeout must be an integer from 1 through 600000 milliseconds.");
     this.client = new Client({ name: "autonomous-ui-qa-agent", version: "1.0.0" }, { capabilities: {} });
     const isWindows = process.platform === "win32";
     this.transport = new StdioClientTransport({
       command: isWindows ? "npx.cmd" : "npx",
-      args: ["-y", "@playwright/mcp@latest", ...(headless ? ["--headless"] : [])],
+      // MCP otherwise reuses a workspace profile, including prior scenarios' local storage.
+      args: ["-y", "@playwright/mcp@latest", "--isolated", "--timeout-navigation", String(navigationTimeoutMs), ...(headless ? ["--headless"] : [])],
       cwd: process.cwd(),
       stderr: "inherit",
     });
@@ -55,8 +60,18 @@ export class PlaywrightMcp {
     return this.tools;
   }
 
-  async call(name: string, args: Record<string, unknown> = {}, timeoutMs = 20_000): Promise<{ text: string; isError: boolean; raw: unknown }> {
-    const response = await withTimeout(this.client.callTool({ name, arguments: args }), timeoutMs, `Playwright MCP tool ${name}`);
+  async call(name: string, args: Record<string, unknown> = {}, timeoutMs?: number): Promise<{ text: string; isError: boolean; raw: unknown }> {
+    const effectiveTimeoutMs = name === "browser_navigate" ? Math.min(this.navigationTimeoutMs, timeoutMs ?? this.navigationTimeoutMs) : timeoutMs ?? 20_000;
+    const controller = new AbortController();
+    let response;
+    try {
+      response = await withTimeout(this.client.callTool({ name, arguments: args }, undefined, {
+        timeout: effectiveTimeoutMs, maxTotalTimeout: effectiveTimeoutMs, resetTimeoutOnProgress: false, signal: controller.signal,
+      }), effectiveTimeoutMs, `Playwright MCP tool ${name}`);
+    } finally {
+      // If our outer timer wins, cancel the pending SDK request as well.
+      controller.abort();
+    }
     const parsed = callResultSchema.safeParse(response);
     if (!parsed.success || !parsed.data.content) {
       if ("toolResult" in response) throw new Error(`Playwright MCP tool ${name} returned a task result instead of a completed tool response.`);
@@ -86,7 +101,9 @@ export class PlaywrightMcp {
       else if (!(required in args)) throw new Error(`Unsupported required screenshot argument "${required}" in discovered MCP schema.`);
     }
     const validatedArgs = validateToolArguments(args, screenshotTool.inputSchema);
-    const rawResult = await withTimeout(this.client.callTool({ name: screenshotTool.name, arguments: validatedArgs }), timeoutMs, "Playwright screenshot");
+    const rawResult = await withTimeout(this.client.callTool({ name: screenshotTool.name, arguments: validatedArgs }, undefined, {
+      timeout: timeoutMs, maxTotalTimeout: timeoutMs, resetTimeoutOnProgress: false,
+    }), timeoutMs, "Playwright screenshot");
     const parsed = callResultSchema.safeParse(rawResult);
     if (!parsed.success || !parsed.data.content) throw new Error("Playwright screenshot returned an invalid MCP response.");
     if (parsed.data.isError) {

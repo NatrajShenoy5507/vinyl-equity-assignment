@@ -72,7 +72,7 @@ describe("browser-free Gemini API smoke", () => {
     const result = await runGeminiSmoke({ apiKey: "sensitive-secret", model: "gemini-test", runId: "smoke-api-error" });
 
     expect(result.status).toBe("BLOCKED");
-    expect(result.error).toEqual({ name: "Error", apiStatusCode: 504 });
+    expect(result.error).toEqual({ name: "GeminiRequestError", apiStatusCode: 504 });
     expect(generateContentMock).toHaveBeenCalledOnce();
     expect(appendActionLogMock).toHaveBeenCalledWith(expect.objectContaining({
       event: "gemini_request", runId: "smoke-api-error", status: "error", apiStatusCode: 504,

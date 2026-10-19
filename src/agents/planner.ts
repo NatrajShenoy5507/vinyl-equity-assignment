@@ -160,7 +160,7 @@ function fingerprint(value: unknown): string {
 
 // Bump for host planning-rule changes; prompt and either response schema changes
 // are detected automatically, including changes that leave old plans parseable.
-const planningContractVersion = 2;
+const planningContractVersion = 3;
 
 function planningContractFingerprint(issue: NormalizedIssue, applicationContext: ApplicationContext): string {
   return fingerprint({
@@ -253,6 +253,15 @@ export function validateScenarioPlan(
       }
       if (check.kind === "filter" && (check.expectedVisible.length === 0 || check.expectedAbsent.length === 0)) {
         throw new Error(`Filter verification for ${check.acceptanceCriterionId} requires both included and excluded text.`);
+      }
+      if (check.kind === "filter") {
+        const subjects = [...check.expectedVisible, ...check.expectedAbsent];
+        if (subjects.some((subject) => !subject.includes("{{uniqueTaskText}}"))) {
+          throw new Error(`Filter verification for ${check.acceptanceCriterionId} requires current-scenario task markers containing {{uniqueTaskText}} for every included and excluded subject.`);
+        }
+        if (subjects.some((subject, index) => subjects.some((other, otherIndex) => index !== otherIndex && other.includes(subject)))) {
+          throw new Error(`Filter verification for ${check.acceptanceCriterionId} requires distinct, non-overlapping included and excluded task identities.`);
+        }
       }
     }
     const missingChecks = scenario.acceptanceCriteriaIds.filter((id) => !checkedCriteria.has(id));

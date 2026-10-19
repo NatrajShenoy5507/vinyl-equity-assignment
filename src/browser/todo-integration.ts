@@ -59,7 +59,7 @@ async function main(): Promise<void> {
   const outputDirectory = resolve(evidenceDirectory, "mcp-integration");
   await mkdir(outputDirectory, { recursive: true });
   const fixture = await startTodoFixture();
-  const browser = new PlaywrightMcp(config.HEADLESS);
+  const browser = new PlaywrightMcp(config.HEADLESS, config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS);
   let result: { status: "PASS" | "BLOCKED"; scope: string; runId: string; targetUrl: string; createdTodo?: string; verifiedSnapshot?: string; reason?: string } = {
     status: "BLOCKED",
     scope: "Deterministic Gemini-free Playwright MCP integration against a local Todo fixture; not a target-app or autonomous AI test.",
@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     if (!snapshotTool) throw new Error("Playwright MCP did not advertise browser_snapshot.");
 
     const navigateArgs = validateToolAction("browser_navigate", { url: fixture.url }, tools, fixture.url);
-    const navigation = await browser.call("browser_navigate", navigateArgs);
+    const navigation = await browser.call("browser_navigate", navigateArgs, config.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS);
     if (navigation.isError) throw new Error(`Navigation failed: ${navigation.text}`);
 
     const initial = await browser.call("browser_snapshot");

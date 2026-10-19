@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { appendActionLog } from "../evidence/logger.js";
-import { getGeminiApiStatusCode } from "./gemini-errors.js";
+import { GeminiRequestError, getGeminiApiStatusCode } from "./gemini-errors.js";
+import { InvalidGeminiJsonError, summarizeGeminiFinishMetadata, summarizeJsonResponse } from "./response-diagnostics.js";
 
 export type GeminiRequestKind = "planner" | "executor" | "smoke";
 
@@ -60,13 +61,27 @@ export class GeminiAgent {
       retryPolicy: "disabled",
     };
     let responseByteCount: number | null = null;
+    let responseDiagnostics: Record<string, unknown> = {};
     try {
-      const response = await this.client.models.generateContent(request);
-      responseByteCount = Buffer.byteLength(response.text ?? "", "utf8");
-      if (!response.text) throw new Error("Gemini returned an empty response; verify model access and API quota.");
-      const parsed: unknown = JSON.parse(response.text);
+      const response = await this.client.models.generateContent(request).catch((error: unknown) => {
+        throw new GeminiRequestError(error);
+      });
+      responseDiagnostics = summarizeGeminiFinishMetadata(response);
+      const responseText = response.text;
+      responseByteCount = Buffer.byteLength(responseText ?? "", "utf8");
+      responseDiagnostics = {
+        ...responseDiagnostics,
+        responseType: responseText ? "invalid_json" : "empty",
+        responseTopLevelKeys: [],
+        responseUnknownTopLevelKeyCount: 0,
+        responseDiscriminator: "unavailable",
+      };
+      if (!responseText) throw new InvalidGeminiJsonError("empty");
+      const parsed: unknown = JSON.parse(responseText);
+      responseDiagnostics = { ...responseDiagnostics, ...summarizeJsonResponse(parsed, responseByteCount) };
       await appendActionLog({
         ...baseDiagnostics,
+        ...responseDiagnostics,
         status: "ok",
         durationMs: Math.round(performance.now() - startedAt),
         apiStatusCode: null,
@@ -75,15 +90,19 @@ export class GeminiAgent {
       return parsed;
     } catch (error) {
       const failure = error instanceof SyntaxError
-        ? new Error(`Gemini returned invalid JSON: ${error.message}`, { cause: error })
+        // JSON.parse errors can echo arbitrary model output. Do not retain even
+        // their cause: the caller may include the error in a report or log.
+        ? new InvalidGeminiJsonError()
         : error;
       await appendActionLog({
         ...baseDiagnostics,
+        ...responseDiagnostics,
         status: "error",
         durationMs: Math.round(performance.now() - startedAt),
         apiStatusCode: getGeminiApiStatusCode(failure),
         responseByteCount,
-        errorName: failure instanceof Error ? failure.name : "UnknownError",
+        errorName: failure instanceof GeminiRequestError && failure.cause instanceof Error ? failure.cause.name
+          : failure instanceof Error ? failure.name : "UnknownError",
       });
       throw failure;
     }
