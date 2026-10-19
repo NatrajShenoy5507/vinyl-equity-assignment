@@ -1,0 +1,58 @@
+
+name: Live Autonomous QA Testing
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  autonomous-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    env:
+      HEADLESS: "true"
+      GEMINI_MODEL: gemini-3.1-flash-lite
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate framework
+        run: |
+          npm run check
+          npm test
+          npm run build
+
+      - name: Verify Playwright MCP
+        run: npm run qa:browser-smoke
+
+      - name: Run live autonomous scenario
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "GEMINI_API_KEY secret is missing."
+            exit 1
+          fi
+          npm run qa:mock -- --scenario=SC-01
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-qa-evidence
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 7
