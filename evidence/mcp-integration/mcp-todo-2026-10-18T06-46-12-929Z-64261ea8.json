@@ -1,8 +1,0 @@
-{
-  "status": "BLOCKED",
-  "scope": "Deterministic Gemini-free Playwright MCP integration; not an autonomous AI test.",
-  "runId": "mcp-todo-2026-10-18T06-46-12-929Z-64261ea8",
-  "targetUrl": "https://demo.playwright.dev/todomvc/",
-  "reason": "Playwright MCP tool browser_navigate timed out after 20000ms.",
-  "completedAt": "2026-10-18T06:46:35.435Z"
-}

@@ -1,0 +1,642 @@
+{
+  "runId": "2026-10-19T17-17-55-641Z-3fedea23",
+  "source": "mock",
+  "model": "gemini-3.5-flash-lite",
+  "issueNumber": 1,
+  "issueTitle": "Todo Management - Create, Complete, Filter and Delete",
+  "targetUrl": "https://demo.playwright.dev/todomvc/",
+  "startedAt": "2026-10-19T17:17:55.644Z",
+  "completedAt": "2026-10-19T17:20:00.439Z",
+  "scenarios": [
+    {
+      "scenarioId": "SC-01",
+      "title": "Create a new task",
+      "acceptanceCriteriaIds": [
+        "AC-01"
+      ],
+      "status": "PASS",
+      "expected": "The new task is successfully created and visible in the list.",
+      "observed": "AC-01 PASS: Required content is present and prohibited content is absent in the final observation.; evidence=F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-snapshot-02.txt",
+      "reason": "All scenario verification checks passed against real post-action accessibility snapshots.",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-01.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-02.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-03.png"
+      ],
+      "actionCount": 1,
+      "recoveryCount": 0,
+      "preconditions": [],
+      "intendedSteps": [
+        {
+          "intent": "Type a unique task text into the todo input field and press enter.",
+          "expectedObservation": "The new task with text '{{uniqueTaskText}}' appears in the task list."
+        }
+      ],
+      "verificationStrategy": "Verify that the newly created task is visible in the task list.",
+      "browserActions": [
+        {
+          "toolName": "browser_navigate",
+          "arguments": {
+            "url": "https://demo.playwright.dev/todomvc/"
+          },
+          "rationale": "Open target application in an isolated scenario browser.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.goto('https://demo.playwright.dev/todomvc/');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-03-077Z.yml)\n### Events\n- New console entries: .playwright-mcp\\console-2026-10-19T17-18-41-138Z.log#L1-L2"
+        },
+        {
+          "toolName": "browser_type",
+          "arguments": {
+            "text": "QA-2026-10-19T17-17-55-641Z-3fedea23-SC-01",
+            "target": "e8",
+            "submit": true
+          },
+          "rationale": "Type the unique task text into the active todo input field and submit it to create a new task.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).fill('QA-2026-10-19T17-17-55-641Z-3fedea23-SC-01');\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).press('Enter');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-06-657Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [active] [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-01\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        }
+      ],
+      "hostVerification": [
+        {
+          "acceptanceCriterionId": "AC-01",
+          "status": "PASS",
+          "reason": "Required content is present and prohibited content is absent in the final observation.",
+          "evidence": [
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-snapshot-02.txt"
+          ]
+        }
+      ],
+      "modelAssessments": [
+        {
+          "acceptanceCriteriaId": "AC-01",
+          "meets": true,
+          "observedEvidence": "- list [ref=e18]:\n  - listitem [ref=e19]:\n    - generic [ref=e20]:\n      - checkbox \"Toggle Todo\" [ref=e21]\n      - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-01\n      - text: ×",
+          "explanation": "The newly created task with text 'QA-2026-10-19T17-17-55-641Z-3fedea23-SC-01' is present inside the task list item element, confirming that a new task with valid text appeared in the list.",
+          "evidenceStatus": "UNSUPPORTED",
+          "snapshotReferences": []
+        }
+      ],
+      "modelAssessmentWarnings": [
+        "The model evidence claim for AC-01 is unsupported by a literal post-action excerpt; it is advisory and does not determine the host result."
+      ],
+      "modelRequestCount": 2,
+      "executionDurationMs": 29830
+    },
+    {
+      "scenarioId": "SC-02",
+      "title": "Mark a task complete",
+      "acceptanceCriteriaIds": [
+        "AC-02"
+      ],
+      "status": "PASS",
+      "expected": "The task is marked as complete and shows its completed state.",
+      "observed": "AC-02 PASS: The subject is visible with a checked checkbox state in the final accessibility snapshot.; evidence=F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-snapshot-03.txt",
+      "reason": "All scenario verification checks passed against real post-action accessibility snapshots.",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-01.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-02.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-03.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-04.png"
+      ],
+      "actionCount": 2,
+      "recoveryCount": 0,
+      "preconditions": [],
+      "intendedSteps": [
+        {
+          "intent": "Create a new task with unique text '{{uniqueTaskText}}'.",
+          "expectedObservation": "The new task '{{uniqueTaskText}}' is visible in the task list."
+        },
+        {
+          "intent": "Click the toggle checkbox associated with the task '{{uniqueTaskText}}'.",
+          "expectedObservation": "The task '{{uniqueTaskText}}' displays a completed state visually."
+        }
+      ],
+      "verificationStrategy": "Verify that checking the task's toggle reflects its completed state.",
+      "browserActions": [
+        {
+          "toolName": "browser_navigate",
+          "arguments": {
+            "url": "https://demo.playwright.dev/todomvc/"
+          },
+          "rationale": "Open target application in an isolated scenario browser.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.goto('https://demo.playwright.dev/todomvc/');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-16-609Z.yml)\n### Events\n- New console entries: .playwright-mcp\\console-2026-10-19T17-19-15-679Z.log#L1-L2"
+        },
+        {
+          "toolName": "browser_type",
+          "arguments": {
+            "text": "QA-2026-10-19T17-17-55-641Z-3fedea23-SC-02",
+            "target": "e8",
+            "submit": true
+          },
+          "rationale": "Type the new task text 'QA-2026-10-19T17-17-55-641Z-3fedea23-SC-02' into the textbox and submit it.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).fill('QA-2026-10-19T17-17-55-641Z-3fedea23-SC-02');\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).press('Enter');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-19-102Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [active] [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-02\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        },
+        {
+          "toolName": "browser_click",
+          "arguments": {
+            "target": "e21"
+          },
+          "rationale": "Click the toggle checkbox associated with the created task to mark it as complete.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('checkbox', { name: 'Toggle Todo' }).click();\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-21-329Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-02\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [checked] [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [checked] [active] [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-02\n            - button \"Delete\" [ref=e33]: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"0\"\n        - text: items left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n      - button \"Clear completed\" [ref=e34] [cursor=pointer]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        }
+      ],
+      "hostVerification": [
+        {
+          "acceptanceCriterionId": "AC-02",
+          "status": "PASS",
+          "reason": "The subject is visible with a checked checkbox state in the final accessibility snapshot.",
+          "evidence": [
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-snapshot-03.txt"
+          ]
+        }
+      ],
+      "modelAssessments": [
+        {
+          "acceptanceCriteriaId": "AC-02",
+          "meets": true,
+          "observedEvidence": "- checkbox \"Toggle Todo\" [checked] [active] [ref=e21]\n- generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-02",
+          "explanation": "The task toggle checkbox associated with 'QA-2026-10-19T17-17-55-641Z-3fedea23-SC-02' is checked in the accessibility tree, satisfying the criteria that a user can mark a created task complete and see its completed state.",
+          "evidenceStatus": "UNSUPPORTED",
+          "snapshotReferences": []
+        }
+      ],
+      "modelAssessmentWarnings": [
+        "The model evidence claim for AC-02 is unsupported by a literal post-action excerpt; it is advisory and does not determine the host result."
+      ],
+      "modelRequestCount": 3,
+      "executionDurationMs": 9079
+    },
+    {
+      "scenarioId": "SC-03",
+      "title": "Filter active tasks",
+      "acceptanceCriteriaIds": [
+        "AC-03"
+      ],
+      "status": "PASS",
+      "expected": "The active filter successfully displays only active tasks and hides completed ones.",
+      "observed": "AC-03 PASS: The selected Active filter includes active items and excludes completed items.; evidence=F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-01.txt | F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-02.txt | F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-03.txt | F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-04.txt | F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-05.txt",
+      "reason": "All scenario verification checks passed against real post-action accessibility snapshots.",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-01.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-02.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-03.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-04.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-05.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-06.png"
+      ],
+      "actionCount": 4,
+      "recoveryCount": 0,
+      "preconditions": [],
+      "intendedSteps": [
+        {
+          "intent": "Create an active task with text '{{uniqueTaskText}}-ACTIVE' and a task to complete with text '{{uniqueTaskText}}-COMPLETED'.",
+          "expectedObservation": "Both tasks are visible in the list."
+        },
+        {
+          "intent": "Mark the task '{{uniqueTaskText}}-COMPLETED' as complete.",
+          "expectedObservation": "The task '{{uniqueTaskText}}-COMPLETED' shows a completed state while '{{uniqueTaskText}}-ACTIVE' remains unchecked."
+        },
+        {
+          "intent": "Click the Active filter control.",
+          "expectedObservation": "The task list shows '{{uniqueTaskText}}-ACTIVE' and hides '{{uniqueTaskText}}-COMPLETED'."
+        }
+      ],
+      "verificationStrategy": "Verify that selecting the Active filter shows active tasks and hides completed tasks.",
+      "browserActions": [
+        {
+          "toolName": "browser_navigate",
+          "arguments": {
+            "url": "https://demo.playwright.dev/todomvc/"
+          },
+          "rationale": "Open target application in an isolated scenario browser.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.goto('https://demo.playwright.dev/todomvc/');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-30-321Z.yml)\n### Events\n- New console entries: .playwright-mcp\\console-2026-10-19T17-19-29-713Z.log#L1-L2"
+        },
+        {
+          "toolName": "browser_type",
+          "arguments": {
+            "text": "QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE",
+            "target": "e8",
+            "submit": true
+          },
+          "rationale": "Create the first task 'QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE' in the todo input field.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).fill('QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE');\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).press('Enter');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-33-012Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [active] [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        },
+        {
+          "toolName": "browser_type",
+          "arguments": {
+            "text": "QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-COMPLETED",
+            "target": "e8",
+            "submit": true
+          },
+          "rationale": "Create the second task 'QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-COMPLETED' to fulfill the setup requirement of having both active and completed tasks visible before applying the filter.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).fill('QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-COMPLETED');\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).press('Enter');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-35-419Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE\n            - text: ×\n        - listitem [ref=e33]:\n          - generic [ref=e34]:\n            - checkbox \"Toggle Todo\" [ref=e35]\n            - generic [ref=e36]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-COMPLETED\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"2\"\n        - text: items left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        },
+        {
+          "toolName": "browser_click",
+          "arguments": {
+            "target": "e35"
+          },
+          "rationale": "Click the checkbox for the completed todo item to mark it as complete before filtering.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('listitem').filter({ hasText: 'QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-COMPLETED' }).getByLabel('Toggle Todo').click();\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-37-766Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE\n            - text: ×\n        - listitem [ref=e33]:\n          - generic [ref=e34]:\n            - checkbox \"Toggle Todo\" [ref=e35]\n            - generic [ref=e36]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-COMPLETED\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"2\"\n        - text: items left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE\n            - text: ×\n        - listitem [ref=e33]:\n          - generic [ref=e34]:\n            - checkbox \"Toggle Todo\" [checked] [active] [ref=e35]\n            - generic [ref=e36]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-COMPLETED\n            - button \"Delete\" [ref=e37]: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n      - button \"Clear completed\" [ref=e38] [cursor=pointer]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        },
+        {
+          "toolName": "browser_click",
+          "arguments": {
+            "target": "e30"
+          },
+          "rationale": "Click the Active filter link to display only active tasks as required by AC-03.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('link', { name: 'Active' }).click();\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/active\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-39-852Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE\n            - text: ×\n        - listitem [ref=e33]:\n          - generic [ref=e34]:\n            - checkbox \"Toggle Todo\" [checked] [active] [ref=e35]\n            - generic [ref=e36]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-COMPLETED\n            - button \"Delete\" [ref=e37]: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n      - button \"Clear completed\" [ref=e38] [cursor=pointer]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/active\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [active] [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n      - button \"Clear completed\" [ref=e38] [cursor=pointer]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        }
+      ],
+      "hostVerification": [
+        {
+          "acceptanceCriterionId": "AC-03",
+          "status": "PASS",
+          "reason": "The selected Active filter includes active items and excludes completed items.",
+          "evidence": [
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-01.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-02.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-03.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-04.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-05.txt"
+          ]
+        }
+      ],
+      "modelAssessments": [
+        {
+          "acceptanceCriteriaId": "AC-03",
+          "meets": true,
+          "observedEvidence": "- list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE\n            - text: ×",
+          "explanation": "When selecting the Active filter, only the active task QA-2026-10-19T17-17-55-641Z-3fedea23-SC-03-ACTIVE is visible in the list and the completed task is hidden as required.",
+          "evidenceStatus": "MATCHED_POST_ACTION",
+          "snapshotReferences": [
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-02.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-03.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-04.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-05.txt"
+          ]
+        }
+      ],
+      "modelAssessmentWarnings": [],
+      "modelRequestCount": 5,
+      "executionDurationMs": 13438
+    },
+    {
+      "scenarioId": "SC-04",
+      "title": "Remove a task",
+      "acceptanceCriteriaIds": [
+        "AC-04"
+      ],
+      "status": "PASS",
+      "expected": "The task is removed and no longer appears in the list.",
+      "observed": "AC-04 PASS: The exact current-scenario task was observed as a list item, its removal control was activated, and the task is absent in the later unfiltered post-action snapshot.; evidence=F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-01.txt | F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-02.txt | F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-03.txt | F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-04.txt | F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-05.txt",
+      "reason": "All scenario verification checks passed against real post-action accessibility snapshots.",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-01.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-02.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-03.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-04.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-05.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-06.png"
+      ],
+      "actionCount": 4,
+      "recoveryCount": 0,
+      "preconditions": [],
+      "intendedSteps": [
+        {
+          "intent": "Create a new task with unique text '{{uniqueTaskText}}'.",
+          "expectedObservation": "The task '{{uniqueTaskText}}' is visible in the list."
+        },
+        {
+          "intent": "Hover over the task '{{uniqueTaskText}}' and click the delete button.",
+          "expectedObservation": "The task '{{uniqueTaskText}}' is removed from the task list."
+        }
+      ],
+      "verificationStrategy": "Verify that removing a task makes it absent from the list.",
+      "browserActions": [
+        {
+          "toolName": "browser_navigate",
+          "arguments": {
+            "url": "https://demo.playwright.dev/todomvc/"
+          },
+          "rationale": "Open target application in an isolated scenario browser.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.goto('https://demo.playwright.dev/todomvc/');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-48-854Z.yml)\n### Events\n- New console entries: .playwright-mcp\\console-2026-10-19T17-19-48-151Z.log#L1-L2"
+        },
+        {
+          "toolName": "browser_type",
+          "arguments": {
+            "text": "QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04",
+            "target": "e8",
+            "submit": true
+          },
+          "rationale": "Create the required unique task 'QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04' in the textbox by typing and pressing Enter.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).fill('QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04');\nawait page.getByRole('textbox', { name: 'What needs to be done?' }).press('Enter');\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-51-586Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [active] [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        },
+        {
+          "toolName": "browser_hover",
+          "arguments": {
+            "target": "e19"
+          },
+          "rationale": "Hover over the task item to reveal the delete button.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByTestId('todo-item').hover();\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-53-531Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04\n            - text: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04\n            - button \"Delete\" [ref=e33]: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        },
+        {
+          "toolName": "browser_click",
+          "arguments": {
+            "target": "e33"
+          },
+          "rationale": "Click the delete button associated with the task QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04 to remove it from the list.",
+          "status": "ok",
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('button', { name: 'Delete' }).click();\n```\n### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-19T17-19-55-516Z.yml)",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e5]:\n    - generic [ref=e6]:\n      - heading \"todos\" [level=1] [ref=e7]\n      - textbox \"What needs to be done?\" [active] [ref=e8]\n    - generic [ref=e15]:\n      - checkbox \"❯Mark all as complete\" [ref=e16]\n      - generic [ref=e17]: ❯Mark all as complete\n      - list [ref=e18]:\n        - listitem [ref=e19]:\n          - generic [ref=e20]:\n            - checkbox \"Toggle Todo\" [ref=e21]\n            - generic [ref=e22]: QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04\n            - button \"Delete\" [ref=e33]: ×\n    - generic [ref=e23]:\n      - generic [ref=e24]:\n        - strong [ref=e25]: \"1\"\n        - text: item left\n      - list [ref=e26]:\n        - listitem [ref=e27]:\n          - link \"All\" [ref=e28] [cursor=pointer]:\n            - /url: \"#/\"\n        - listitem [ref=e29]:\n          - link \"Active\" [ref=e30] [cursor=pointer]:\n            - /url: \"#/active\"\n        - listitem [ref=e31]:\n          - link \"Completed\" [ref=e32] [cursor=pointer]:\n            - /url: \"#/completed\"\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        },
+        {
+          "toolName": "browser_snapshot",
+          "arguments": {},
+          "rationale": "Obtain the current page snapshot to verify whether the task QA-2026-10-19T17-17-55-641Z-3fedea23-SC-04 has been removed from the list after clicking the delete button.",
+          "status": "ok",
+          "result": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "preActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```",
+          "postActionObservation": "### Page\n- Page URL: https://demo.playwright.dev/todomvc/#/\n- Page Title: React • TodoMVC\n- Console: 1 errors, 0 warnings\n### Snapshot\n```yaml\n- generic [active] [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com\n```"
+        }
+      ],
+      "hostVerification": [
+        {
+          "acceptanceCriterionId": "AC-04",
+          "status": "PASS",
+          "reason": "The exact current-scenario task was observed as a list item, its removal control was activated, and the task is absent in the later unfiltered post-action snapshot.",
+          "evidence": [
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-01.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-02.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-03.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-04.txt",
+            "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-05.txt"
+          ]
+        }
+      ],
+      "modelAssessments": [
+        {
+          "acceptanceCriteriaId": "AC-04",
+          "meets": true,
+          "observedEvidence": "The exact current-scenario task was observed as a list item, its removal control was activated, and the task is absent in the later unfiltered post-action snapshot.",
+          "explanation": "Host verification readiness confirms PASS and evidence shows the task is fully removed from the todo list.",
+          "evidenceStatus": "UNSUPPORTED",
+          "snapshotReferences": []
+        }
+      ],
+      "modelAssessmentWarnings": [
+        "The model evidence claim for AC-04 is unsupported by a literal post-action excerpt; it is advisory and does not determine the host result."
+      ],
+      "modelRequestCount": 5,
+      "executionDurationMs": 12381
+    }
+  ],
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Requirement Discovery",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-19T17:17:55.653Z",
+      "completedAt": "2026-10-19T17:17:55.670Z",
+      "durationMs": 17,
+      "outputArtifacts": [],
+      "errors": []
+    },
+    {
+      "phase": 2,
+      "name": "Application Exploration",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-19T17:17:55.671Z",
+      "completedAt": "2026-10-19T17:18:28.556Z",
+      "durationMs": 32885,
+      "outputArtifacts": [
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\application-context.json",
+        "F:\\vinyl-challenge\\evidence\\application-context.json",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\exploration.png"
+      ],
+      "errors": []
+    },
+    {
+      "phase": 3,
+      "name": "Scenario Generation",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-19T17:18:28.557Z",
+      "completedAt": "2026-10-19T17:18:33.496Z",
+      "durationMs": 4939,
+      "outputArtifacts": [
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\generated-scenarios.json",
+        "F:\\vinyl-challenge\\evidence\\generated-scenarios.json"
+      ],
+      "errors": []
+    },
+    {
+      "phase": 4,
+      "name": "Autonomous Execution",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-19T17:18:33.496Z",
+      "completedAt": "2026-10-19T17:20:00.438Z",
+      "durationMs": 86942,
+      "outputArtifacts": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23",
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\action-log.ndjson"
+      ],
+      "errors": []
+    },
+    {
+      "phase": 5,
+      "name": "Conditional Failure Revalidation",
+      "status": "NOT_RUN",
+      "outputArtifacts": [],
+      "errors": [
+        "No host-verified functional failure; revalidation was not required."
+      ]
+    },
+    {
+      "phase": 6,
+      "name": "Final Reporting",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-19T17:20:00.439Z",
+      "completedAt": "2026-10-19T17:20:00.439Z",
+      "durationMs": 0,
+      "outputArtifacts": [
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\report.json",
+        "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\report.md",
+        "F:\\vinyl-challenge\\evidence\\report.json",
+        "F:\\vinyl-challenge\\evidence\\report.md"
+      ],
+      "errors": []
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-01",
+      "description": "A new task with valid text appears in the list.",
+      "scenarioIds": [
+        "SC-01"
+      ],
+      "status": "PASS",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-snapshot-02.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-01.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-02.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-01-03.png"
+      ]
+    },
+    {
+      "id": "AC-02",
+      "description": "A user can mark a created task complete and see its completed state.",
+      "scenarioIds": [
+        "SC-02"
+      ],
+      "status": "PASS",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-snapshot-03.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-01.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-02.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-03.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-02-04.png"
+      ]
+    },
+    {
+      "id": "AC-03",
+      "description": "The Active filter hides completed tasks and shows active tasks.",
+      "scenarioIds": [
+        "SC-03"
+      ],
+      "status": "PASS",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-01.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-02.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-03.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-04.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-snapshot-05.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-01.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-02.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-03.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-04.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-05.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-03-06.png"
+      ]
+    },
+    {
+      "id": "AC-04",
+      "description": "A user can remove a task and it no longer appears in the list.",
+      "scenarioIds": [
+        "SC-04"
+      ],
+      "status": "PASS",
+      "evidence": [
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-01.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-02.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-03.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-04.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-snapshot-05.txt",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-01.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-02.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-03.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-04.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-05.png",
+        "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23\\SC-04-06.png"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "label": "Application context (run)",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\application-context.json",
+      "available": true
+    },
+    {
+      "label": "Application context (latest)",
+      "path": "F:\\vinyl-challenge\\evidence\\application-context.json",
+      "available": true
+    },
+    {
+      "label": "Generated scenarios (run)",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\generated-scenarios.json",
+      "available": true
+    },
+    {
+      "label": "Generated scenarios (latest)",
+      "path": "F:\\vinyl-challenge\\evidence\\generated-scenarios.json",
+      "available": true
+    },
+    {
+      "label": "Screenshots directory",
+      "path": "F:\\vinyl-challenge\\evidence\\screenshots\\2026-10-19T17-17-55-641Z-3fedea23",
+      "available": true
+    },
+    {
+      "label": "Run report JSON",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\report.json",
+      "available": true
+    },
+    {
+      "label": "Run report Markdown",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\report.md",
+      "available": true
+    },
+    {
+      "label": "Latest report JSON",
+      "path": "F:\\vinyl-challenge\\evidence\\report.json",
+      "available": true
+    },
+    {
+      "label": "Latest report Markdown",
+      "path": "F:\\vinyl-challenge\\evidence\\report.md",
+      "available": true
+    },
+    {
+      "label": "Action log (latest)",
+      "path": "F:\\vinyl-challenge\\evidence\\action-log.ndjson",
+      "available": true
+    },
+    {
+      "label": "Action log (run)",
+      "path": "F:\\vinyl-challenge\\evidence\\runs\\2026-10-19T17-17-55-641Z-3fedea23\\action-log.ndjson",
+      "available": true
+    }
+  ],
+  "environment": {
+    "nodeVersion": "v22.20.0",
+    "platform": "win32",
+    "architecture": "x64",
+    "headless": true
+  },
+  "status": "PASS",
+  "totals": {
+    "PASS": 4,
+    "FAIL": 0,
+    "BLOCKED": 0,
+    "SKIPPED": 0
+  }
+}

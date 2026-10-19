@@ -1,46 +1,26 @@
 {
   "issueFingerprint": "078900874e0b61fa547edfdb5230a4eb6edf1e21e73fbe64498a703a951f141d",
   "applicationContextFingerprint": "46ad37c3746df2f9cccfc4fa69fa7aa4da6fa947554b195bfc066066eb664ac2",
-  "modelName": "gemini-3.1-flash-lite",
-  "generatedAt": "2026-10-18T09:39:42.701Z",
+  "planningContractFingerprint": "09e3d53206b9dea6d9ed06bd6cd52f4ae8372210b6696c21ca005d1fb630abfe",
+  "modelName": "gemini-3.5-flash-lite",
+  "generatedAt": "2026-10-19T17:18:33.477Z",
   "plan": {
     "issueNumber": 1,
     "scenarios": [
       {
         "id": "SC-01",
-        "title": "Create, Complete, Filter, and Delete Todo Items",
+        "title": "Create a new task",
         "acceptanceCriteriaIds": [
-          "AC-01",
-          "AC-02",
-          "AC-03",
-          "AC-04"
+          "AC-01"
         ],
-        "preconditions": [
-          "User is on the TodoMVC homepage"
-        ],
+        "preconditions": [],
         "steps": [
           {
-            "intent": "Enter a new task name into the input field and press enter",
-            "expectedObservation": "The task appears in the list"
-          },
-          {
-            "intent": "Click the checkbox associated with the task",
-            "expectedObservation": "The task is marked as completed"
-          },
-          {
-            "intent": "Create a second task and leave it active",
-            "expectedObservation": "Both tasks are visible in the list"
-          },
-          {
-            "intent": "Click the Active filter link",
-            "expectedObservation": "Only the active task is visible"
-          },
-          {
-            "intent": "Click the delete button for the active task",
-            "expectedObservation": "The task is removed from the list"
+            "intent": "Type a unique task text into the todo input field and press enter.",
+            "expectedObservation": "The new task with text '{{uniqueTaskText}}' appears in the task list."
           }
         ],
-        "verificationStrategy": "Sequential verification of task lifecycle states using unique markers for each action.",
+        "verificationStrategy": "Verify that the newly created task is visible in the task list.",
         "verificationChecks": [
           {
             "acceptanceCriterionId": "AC-01",
@@ -49,7 +29,36 @@
               "{{uniqueTaskText}}"
             ],
             "expectedAbsent": []
+          }
+        ],
+        "relevantApplicationContext": [
+          "textbox: What needs to be done? (active)"
+        ],
+        "unknownControlsToDiscover": [
+          "Task list container",
+          "Created task item element"
+        ],
+        "expectedResult": "The new task is successfully created and visible in the list."
+      },
+      {
+        "id": "SC-02",
+        "title": "Mark a task complete",
+        "acceptanceCriteriaIds": [
+          "AC-02"
+        ],
+        "preconditions": [],
+        "steps": [
+          {
+            "intent": "Create a new task with unique text '{{uniqueTaskText}}'.",
+            "expectedObservation": "The new task '{{uniqueTaskText}}' is visible in the task list."
           },
+          {
+            "intent": "Click the toggle checkbox associated with the task '{{uniqueTaskText}}'.",
+            "expectedObservation": "The task '{{uniqueTaskText}}' displays a completed state visually."
+          }
+        ],
+        "verificationStrategy": "Verify that checking the task's toggle reflects its completed state.",
+        "verificationChecks": [
           {
             "acceptanceCriterionId": "AC-02",
             "kind": "checked",
@@ -57,7 +66,39 @@
               "{{uniqueTaskText}}"
             ],
             "expectedAbsent": []
+          }
+        ],
+        "relevantApplicationContext": [
+          "textbox: What needs to be done? (active)"
+        ],
+        "unknownControlsToDiscover": [
+          "Task toggle checkbox"
+        ],
+        "expectedResult": "The task is marked as complete and shows its completed state."
+      },
+      {
+        "id": "SC-03",
+        "title": "Filter active tasks",
+        "acceptanceCriteriaIds": [
+          "AC-03"
+        ],
+        "preconditions": [],
+        "steps": [
+          {
+            "intent": "Create an active task with text '{{uniqueTaskText}}-ACTIVE' and a task to complete with text '{{uniqueTaskText}}-COMPLETED'.",
+            "expectedObservation": "Both tasks are visible in the list."
           },
+          {
+            "intent": "Mark the task '{{uniqueTaskText}}-COMPLETED' as complete.",
+            "expectedObservation": "The task '{{uniqueTaskText}}-COMPLETED' shows a completed state while '{{uniqueTaskText}}-ACTIVE' remains unchecked."
+          },
+          {
+            "intent": "Click the Active filter control.",
+            "expectedObservation": "The task list shows '{{uniqueTaskText}}-ACTIVE' and hides '{{uniqueTaskText}}-COMPLETED'."
+          }
+        ],
+        "verificationStrategy": "Verify that selecting the Active filter shows active tasks and hides completed tasks.",
+        "verificationChecks": [
           {
             "acceptanceCriterionId": "AC-03",
             "kind": "filter",
@@ -67,7 +108,36 @@
             "expectedAbsent": [
               "{{uniqueTaskText}}-COMPLETED"
             ]
+          }
+        ],
+        "relevantApplicationContext": [
+          "textbox: What needs to be done? (active)"
+        ],
+        "unknownControlsToDiscover": [
+          "Active filter link",
+          "Completed task toggle checkbox"
+        ],
+        "expectedResult": "The active filter successfully displays only active tasks and hides completed ones."
+      },
+      {
+        "id": "SC-04",
+        "title": "Remove a task",
+        "acceptanceCriteriaIds": [
+          "AC-04"
+        ],
+        "preconditions": [],
+        "steps": [
+          {
+            "intent": "Create a new task with unique text '{{uniqueTaskText}}'.",
+            "expectedObservation": "The task '{{uniqueTaskText}}' is visible in the list."
           },
+          {
+            "intent": "Hover over the task '{{uniqueTaskText}}' and click the delete button.",
+            "expectedObservation": "The task '{{uniqueTaskText}}' is removed from the task list."
+          }
+        ],
+        "verificationStrategy": "Verify that removing a task makes it absent from the list.",
+        "verificationChecks": [
           {
             "acceptanceCriterionId": "AC-04",
             "kind": "absent_after_seen",
@@ -83,11 +153,10 @@
           "textbox: What needs to be done? (active)"
         ],
         "unknownControlsToDiscover": [
-          "checkbox for task completion",
-          "filter links for All, Active, Completed",
-          "delete button for tasks"
+          "Delete task button",
+          "Task item hover trigger"
         ],
-        "expectedResult": "The user can successfully manage the task lifecycle from creation through deletion."
+        "expectedResult": "The task is removed and no longer appears in the list."
       }
     ]
   }

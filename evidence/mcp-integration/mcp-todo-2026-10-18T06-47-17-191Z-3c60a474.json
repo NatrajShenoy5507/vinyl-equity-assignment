@@ -1,9 +1,0 @@
-{
-  "status": "PASS",
-  "scope": "Deterministic Gemini-free Playwright MCP integration against a local Todo fixture; not a target-app or autonomous AI test.",
-  "runId": "mcp-todo-2026-10-18T06-47-17-191Z-3c60a474",
-  "targetUrl": "http://127.0.0.1:56619/",
-  "createdTodo": "MCP-QA-mcp-todo-2026-10-18T06-47-17-191Z-3c60a474",
-  "verifiedSnapshot": "### Page\n- Page URL: http://127.0.0.1:56619/\n- Page Title: Local Todo MCP fixture\n### Snapshot\n```yaml\n- generic [ref=e1]:\n  - heading \"todos\" [level=1] [ref=e2]\n  - generic [ref=e3]:\n    - generic [ref=e4]:\n      - text: What needs to be done?\n      - textbox \"What needs to be done?\" [active] [ref=e5]\n    - button \"Add\" [ref=e6]\n  - list [ref=e7]:\n    - listitem [ref=e8]: MCP-QA-mcp-todo-2026-10-18T06-47-17-191Z-3c60a474\n```",
-  "completedAt": "2026-10-18T06:47:21.137Z"
-}

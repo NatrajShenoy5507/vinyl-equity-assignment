@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "runId": "2026-10-18T09-39-36-184Z-b0f78dfd",
+  "runId": "2026-10-19T17-17-55-641Z-3fedea23",
   "status": "PASS",
-  "startedAt": "2026-10-18T09:39:36.192Z",
-  "completedAt": "2026-10-18T09:39:39.701Z",
+  "startedAt": "2026-10-19T17:17:55.671Z",
+  "completedAt": "2026-10-19T17:18:28.536Z",
   "targetUrl": "https://demo.playwright.dev/todomvc/",
   "page": {
     "title": "React • TodoMVC",
     "currentUrl": "https://demo.playwright.dev/todomvc/#/",
-    "observedAt": "2026-10-18T09:39:39.055Z",
+    "observedAt": "2026-10-19T17:18:27.537Z",
     "accessibilitySnapshot": "- generic [ref=e1]:\n  - generic [ref=e2]:\n    - text: This is just a demo of TodoMVC for testing, not the\n    - link \"real TodoMVC app.\" [ref=e3] [cursor=pointer]:\n      - /url: https://todomvc.com/\n  - generic [ref=e6]:\n    - heading \"todos\" [level=1] [ref=e7]\n    - textbox \"What needs to be done?\" [active] [ref=e8]\n  - contentinfo [ref=e9]:\n    - paragraph [ref=e10]: Double-click to edit a todo\n    - paragraph [ref=e11]:\n      - text: Created by\n      - link \"Remo H. Jansen\" [ref=e12] [cursor=pointer]:\n        - /url: http://github.com/remojansen/\n    - paragraph [ref=e13]:\n      - text: Part of\n      - link \"TodoMVC\" [ref=e14] [cursor=pointer]:\n        - /url: http://todomvc.com",
     "visibleSemanticControls": [
       {
@@ -40,7 +40,7 @@
     ]
   },
   "evidence": {
-    "screenshot": "screenshots/2026-10-18T09-39-36-184Z-b0f78dfd/exploration.png",
+    "screenshot": "screenshots/2026-10-19T17-17-55-641Z-3fedea23/exploration.png",
     "accessibilitySnapshotSource": "page.accessibilitySnapshot"
   },
   "sourceReferences": {
